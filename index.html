@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Zenith Order-to-Cash</title>
+  <meta name="description" content="A business simulation of the Zenith Cooling Supplies order-to-cash process. Watch the process, change the controls, and learn when money is really counted.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="hud" id="hud">
+    <div class="brand"><span class="logo" aria-hidden="true">Z</span><div><b>Zenith O2C</b><small id="modeLabel">Campaign</small></div></div>
+    <div class="clock"><b id="dateLabel">Sat 1 Mar 2025</b><span id="timeLabel">08:00</span></div>
+    <div class="speed" role="group" aria-label="Game speed">
+      <button id="btnPause" class="sp" data-speed="0" title="Pause (Space)">❚❚</button>
+      <button class="sp" data-speed="1" title="1 day = 5 minutes">1×</button>
+      <button class="sp" data-speed="2" title="1 day = 2 minutes">2.5×</button>
+      <button class="sp" data-speed="3" title="1 day = 1 minute">5×</button>
+      <button id="btnDay" class="act" title="Jump to the next morning">+1 day</button>
+      <button id="btnMonth" class="act" title="Run to the next month-end report">Skip month ⏭</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><small>Cash in bank</small><b id="cashLabel" class="mono">200,000</b></div>
+      <div class="stat"><small>Audit strikes</small><b id="strikeLabel">0 / 2</b></div>
+      <button id="btnMenu" class="act" aria-haspopup="dialog">Menu</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage" aria-label="Business map">
+      <div class="canvasWrap"><canvas id="map" aria-label="Map of Zenith Cooling Supplies: orders, staff, warehouse, truck and bank"></canvas>
+        <div class="paused" id="pausedTag">Paused: inspect anything, then press play</div>
+      </div>
+      <div class="feed" id="feed" aria-live="polite"></div>
+    </section>
+    <aside class="side">
+      <nav class="tabs" id="tabs" role="tablist"></nav>
+      <div class="panel" id="panel"></div>
+    </aside>
+  </main>
+
+  <div class="modalBack" id="modalBack" hidden>
+    <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+  </div>
+  <div class="toast" id="toast" hidden></div>
+
+  <noscript>This game needs JavaScript.</noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

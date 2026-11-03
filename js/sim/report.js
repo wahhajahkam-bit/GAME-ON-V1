@@ -22,7 +22,7 @@ export function dnStatus(s, dn, m) {
   return { ok: true, inv };
 }
 
-export function computeMonthReport(s, m) {
+export function computeMonthReport(s, m, snapArg) {
   const f = monthFirst(m), l = monthLast(m);
   const inM = (d) => d >= f && d <= l;
   const orders = s.orders.filter((o) => inM(o.day));
@@ -64,7 +64,7 @@ export function computeMonthReport(s, m) {
   const unappliedList = recM.filter((r) => !r.applied || r.appliedDay > l);
   const unapplied = recM.length ? sum(unappliedList, (r) => r.amount) / sum(recM, (r) => r.amount) : 0;
 
-  const snap = s.monthEnd[m] || { erpAR: 0, overdue: 0, trueAR: 0, cash: s.cash };
+  const snap = snapArg || s.monthEnd[m] || { erpAR: 0, overdue: 0, trueAR: 0, cash: s.cash };
   const overduePct = snap.erpAR > 0 ? snap.overdue / snap.erpAR : 0;
   const stages = D.stageTable(s.controls);
   const waitDays = released.length ? sum(released, (o) => o.waitH) / released.length / 10 : 0;
