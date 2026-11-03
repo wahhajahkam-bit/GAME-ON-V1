@@ -41,6 +41,15 @@ const ok = (name, cond, info = '') => { console.log(`${cond ? 'PASS' : 'FAIL'}  
   ok('hire works', hire(s, 'CAO').ok);
 }
 
+// 2b. A limit approved by the Finance Manager is not an unauthorised change
+{
+  const s = createGame({ seed: 5 });
+  setApprovedLimit(s, 'D1', 90000);
+  skipToNextClose(s);
+  const k = Object.fromEntries(s.reports[0].kpis.map((x) => [x.id, x.val]));
+  ok('FM-approved limit not counted as unauthorised', k.mdChanges === 1, k.mdChanges);
+}
+
 // 3. Full campaigns: as-is and "consultant" play, several seeds
 for (const seed of [1, 2, 3]) {
   const a = createGame({ seed });

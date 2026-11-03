@@ -215,13 +215,13 @@ function drawProject(ctx, s) {
   const p = s.project;
   if (!p) { text(ctx, 'No project yet', 96, 290, FB(500, 11), col('muted'), 'center'); return; }
   const P = D.PROJECT;
-  text(ctx, `${p.delivered} / ${P.units} units delivered`, 26, 262, FB(600, 10.5), col('ink'));
-  rr(ctx, 26, 268, 140, 8, 4); ctx.fillStyle = col('soft'); ctx.fill();
-  rr(ctx, 26, 268, 140 * p.delivered / P.units, 8, 4); ctx.fillStyle = col('rev'); ctx.fill();
-  text(ctx, `Revenue ${kfmt(p.revenue)}`, 26, 292, FM(10), col('rev'));
-  text(ctx, `Advance left ${kfmt(p.liability)}`, 26, 306, FM(10), col('warn'));
-  text(ctx, `Owed ${kfmt(p.ar)}`, 26, 320, FM(10), col('ink'));
-  text(ctx, `Profit ${kfmt(p.revenue - p.cost)}`, 26, 334, FM(10), col('good'));
+  text(ctx, `${p.delivered} / ${P.units} units delivered`, 26, 274, FB(600, 10.5), col('ink'));
+  rr(ctx, 26, 279, 140, 7, 4); ctx.fillStyle = col('soft'); ctx.fill();
+  rr(ctx, 26, 279, 140 * p.delivered / P.units, 7, 4); ctx.fillStyle = col('rev'); ctx.fill();
+  text(ctx, `Revenue ${kfmt(p.revenue)}`, 26, 300, FM(10), col('rev'));
+  text(ctx, `Advance left ${kfmt(p.liability)}`, 26, 313, FM(10), col('warn'));
+  text(ctx, `Owed ${kfmt(p.ar)}`, 26, 326, FM(10), col('ink'));
+  text(ctx, `Profit ${kfmt(p.revenue - p.cost)}`, 26, 339, FM(10), col('good'));
 }
 function drawClose(ctx, s) {
   const c = s.controls;

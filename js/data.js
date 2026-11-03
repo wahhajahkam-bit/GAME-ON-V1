@@ -74,7 +74,7 @@ export const RENT = 6000; // ASSUMPTION: rent and utilities per month
 export const ROLES = {
   SE: { name: 'Sales Executive', short: 'SE', salary: 5000, color: '#6741D9', base: 2 },
   SM: { name: 'Sales Manager', short: 'SM', salary: 7000, color: '#6741D9', base: 1 },
-  GM: { name: 'General Manager', short: 'GM', salary: 10000, color: '#16203A', base: 1 },
+  GM: { name: 'General Manager', short: 'GM', salary: 10000, color: '#3B4A6B', base: 1 },
   FM: { name: 'Finance Manager', short: 'FM', salary: 9000, color: '#C2255C', base: 1 },
   BC: { name: 'Billing Clerk', short: 'BC', salary: 4000, color: '#0B7285', base: 1 },
   CAO: { name: 'Cash Application Officer', short: 'CA', salary: 6000, color: '#2B8A3E', base: 0 },

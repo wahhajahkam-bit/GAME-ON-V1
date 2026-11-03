@@ -31,7 +31,7 @@ export function computeMonthReport(s, m, snapArg) {
   const overrides = s.overrides.filter((x) => inM(x.day));
   const discounted = orders.filter((o) => o.disc > 0 && o.approver);
   const discBreach = discounted.filter((o) => o.flags.discountBreach);
-  const mdUnauth = s.mdChanges.filter((c) => inM(c.day) && !c.rejected);
+  const mdUnauth = s.mdChanges.filter((c) => inM(c.day) && !c.rejected && !c.approved);
   const dns = s.deliveries.filter((x) => x.month === m);
   const dnInfo = dns.map((dn) => ({ dn, st: dnStatus(s, dn, m) }));
   const rightFirst = dns.length ? dnInfo.filter((x) => x.st.ok).length / dns.length : null;

@@ -1,14 +1,46 @@
-# GAME ON V1
+# GAME ON V1: Zenith Order-to-Cash
 
-A 2D browser game with animation, a bit of data, and some math. It runs in any web browser with nothing to install.
+A 2D browser game that turns the **Zenith Cooling Supplies order-to-cash case** (Module 2, Problem 1) into a live business. You watch the process run, pause to inspect the data, change how each of the 11 steps works, and see the results month by month. Along the way you learn **when money is really counted**: order, delivery, invoice, bank, cash applied.
+
+It runs in any web browser with nothing to install. It will be playable at `https://wahhajahkam-bit.github.io/GAME-ON-V1` once GitHub Pages is turned on.
+
+## How the game works
+
+- **The map**: dealer orders arrive as WhatsApp messages. Staff (dots) walk to their tasks: Sales Executives, Sales Manager, General Manager, Finance Manager, Billing Clerk, warehouse staff and a driver. Orders move as boxes from the sales desk to the ERP credit check, the credit hold, the warehouse and onto the truck. The bank shows cash; the dealer cards show what each dealer owes.
+- **Time**: pause and inspect anything. Speeds: 1 day = 5 minutes, 2 minutes or 1 minute. Also **+1 day** and **Skip month**.
+- **March is exact**: the 9 orders, deliveries, invoices, receipts and the limit change happen exactly as in Exhibits A–H. If you change nothing, the March report matches the solution workbook. From April, new orders come from the same dealers and products.
+- **11 control panels** (Steps tab): each shows how the step works today, the policy, what is happening now, and options to switch to. Options cost money, take days to set up, may need staff, and have side effects.
+- **Hidden truth**: real shelf stock is unknown until you set up counting. Forgotten invoices are invisible until you run a report.
+- **Books tab**: what the ERP says next to the truth (revenue by delivery, receivables, suspense, stock, the hotel project's advance as a liability).
+- **Finance questions** pop up at the right moment: an order is a promise, revenue on delivery, cash when it reaches the bank, a promise to pay is not enough, an advance is a liability. A big hotel contract (a scaled version of "100M project, 60M materials, 20M advance") runs from April to June.
+- **Month-end report** on the 3rd of each month: KPIs (from sheet 8 of the workbook), what went wrong, booked vs earned revenue, the exception map, true profit, dealer balances and the changes you made.
+
+**Campaign** (March to June): your score combines the KPI score, true profit and cash. You lose if the auditors reject the books twice (revenue errors above 10%; March is only a warning) or if cash runs out. **Sandbox**: no winning or losing.
+
+Figures not in the case (opening stock, unit costs, cash, salaries, the hotel project) are assumptions and are listed in the game's Menu.
+
+## Files
+
+| Path | What it is |
+|------|------------|
+| `index.html`, `css/style.css` | The page and its styles (light and dark) |
+| `js/data.js` | Case data (Exhibits A–H), the 11 steps and their options, KPIs, questions, concept cards |
+| `js/sim/sim.js` | The business engine: every action is an event at a game time |
+| `js/sim/report.js` | Month-end report, KPIs and score |
+| `js/render/map.js` | The animated map (Canvas) |
+| `js/ui/panels.js`, `js/ui/modals.js` | Side tabs and pop-up windows |
+| `js/main.js` | Game loop, speeds, input, saving |
+| `tests/` | Node checks: March reproduces the solution; fixes work; full campaigns run |
+
+Run the checks with `npm test` (Node 18 or newer). To play locally, serve the folder (for example `python3 -m http.server`) and open `http://localhost:8000`; the game uses JavaScript modules, which browsers do not load from a plain file.
 
 ## Tech stack
 
 - **HTML, CSS, JavaScript**: plain web technologies, no install needed.
-- **HTML Canvas**: draws and animates sprites, shapes, and effects at 60 frames per second.
-- **Math in JavaScript**: movement, physics (gravity, bouncing), collision detection, angles, scoring formulas, random level generation.
-- **Data**: game settings, levels, and stats in JSON. High scores and progress are saved in the browser (`localStorage`). An online database can be added later for shared leaderboards.
-- **Libraries (optional)**: something like Phaser only if the game needs it. Plain JavaScript is usually simpler for a moderately complex game.
+- **HTML Canvas**: draws and animates the business map.
+- **Math in JavaScript**: credit exposure, discounts and floor prices, invoices vs deliveries, revenue cut-off, receivables and ageing, stock, cycle time, KPIs and scoring.
+- **Data**: the case data and settings live in `js/data.js`. Progress is saved in the browser (`localStorage`).
+- **Libraries**: none.
 
 ## GitHub setup
 
@@ -18,10 +50,10 @@ A 2D browser game with animation, a bit of data, and some math. It runs in any w
 
 ## Development steps
 
-1. **Agree on the design**: rules, controls, win/lose conditions, and the math involved.
-2. **Basic setup**: `index.html`, a game loop, keyboard/mouse/touch input, and a canvas that resizes to the screen.
-3. **Core gameplay**: player movement, game objects, collisions, and the main math. *(First playable version for feedback.)*
-4. **Data**: scores, levels, settings, and saving.
-5. **Animation and polish**: sprite animation, transitions, particles, sound, and menus.
-6. **Testing**: play-testing in the browser, bug fixes, and checks on phone-sized screens.
-7. **Publish**: commit, push, turn on GitHub Pages, and share the playable link.
+1. **Agree on the design** ✅
+2. **Basic setup** ✅: `index.html`, game loop, keyboard/mouse/touch input, canvas that resizes to the screen.
+3. **Core gameplay** ✅: the order-to-cash engine, staff, orders, stock, credit, billing, cash.
+4. **Data** ✅: KPIs, month-end reports, scoring, saving.
+5. **Animation and polish** ✅: walking staff, truck, questions, charts, menus, optional sound.
+6. **Testing** ✅: March fidelity checks, campaign runs, browser play-tests at laptop and phone sizes.
+7. **Publish**: push, turn on GitHub Pages, and share the playable link.
