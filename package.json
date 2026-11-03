@@ -1,0 +1,10 @@
+{
+  "name": "game-on-v1",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zenith Order-to-Cash: a business simulation game",
+  "scripts": {
+    "test": "node tests/march-check.js && node tests/controls-check.js"
+  }
+}
