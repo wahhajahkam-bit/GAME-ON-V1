@@ -1,8 +1,8 @@
 // Weekly review: at the end of every 7th day the game asks up to 5 questions about that week.
 // Concept questions triggered during the week come first; the rest are built from the week's real numbers.
 // Picks here never touch the business random numbers (s.rng).
-import * as D from '../data.js';
-import { fmtDay, monthOf } from './time.js';
+import * as D from '../data.js?v=6';
+import { fmtDay, monthOf } from './time.js?v=6';
 
 const n0 = (x) => Math.round(x).toLocaleString('en-US');
 const MAX = 5;

@@ -7,7 +7,7 @@
   <meta name="description" content="A business simulation of the Zenith Cooling Supplies order-to-cash process. Watch the process, change the controls, and learn when money is really counted.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=6">
 </head>
 <body>
   <header class="hud" id="hud">
@@ -15,9 +15,10 @@
     <div class="clock"><b id="dateLabel">Sat 1 Mar 2025</b><span id="timeLabel">08:00</span></div>
     <div class="speed" role="group" aria-label="Game speed">
       <button id="btnPause" class="sp" data-speed="0" title="Pause (Space)">❚❚</button>
-      <button class="sp" data-speed="1" title="1 day = 5 minutes">1×</button>
-      <button class="sp" data-speed="2" title="1 day = 2 minutes">2.5×</button>
-      <button class="sp" data-speed="3" title="1 day = 1 minute">5×</button>
+      <button class="sp" data-speed="1" title="1× (key 1): a working day takes 5 minutes">1×</button>
+      <button class="sp" data-speed="2" title="2× (key 2): a day takes 2.5 minutes">2×</button>
+      <button class="sp" data-speed="3" title="5× (key 3): a day takes 1 minute">5×</button>
+      <button class="sp" data-speed="4" title="10× (key 4): a day takes 30 seconds">10×</button>
       <button id="btnDay" class="act" title="Jump to the next morning">+1 day</button>
       <button id="btnMonth" class="act" title="Run to the next month-end report">Skip month ⏭</button>
     </div>
@@ -41,11 +42,9 @@
           <div class="paused" id="pausedTag" hidden></div>
         </div>
         <div class="qdock" id="qdock" aria-live="polite"></div>
+        <button class="ticker" id="ticker" data-tab="events" title="Open all events"></button>
       </div>
-      <div class="feedBar">
-        <button class="feedToggle" id="feedToggle" aria-expanded="true" title="Show or hide the latest events">Latest events ▾</button>
-        <div class="feed" id="feed" aria-live="polite"></div>
-      </div>
+
     </section>
     <div class="resizer" id="resizer" role="separator" aria-orientation="vertical" aria-label="Drag to resize the panel" tabindex="0"></div>
     <aside class="side" id="side">
@@ -70,6 +69,6 @@
   <div class="toast" id="toast" hidden></div>
 
   <noscript>This game needs JavaScript.</noscript>
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/main.js?v=6"></script>
 </body>
 </html>

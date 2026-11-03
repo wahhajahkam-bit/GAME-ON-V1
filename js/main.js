@@ -1,15 +1,16 @@
 // Game loop, input and screen updates.
-import * as D from './data.js';
-import { createGame, advanceTo, skipToNextClose, setControl, hire, letGo, answerQuestion, setApprovedLimit } from './sim/sim.js';
-import { DAY_START, DAY_END, tOf, dayOf, fmtDayLong, fmtClock, fmtDay, fmtT } from './sim/time.js';
-import { finalScore } from './sim/report.js';
-import { questionById } from './sim/weekly.js';
-import { draw, readColors, hitTest, W, H, ZONES, staffName } from './render/map.js';
-import * as P from './ui/panels.js';
-import * as M from './ui/modals.js';
+import * as D from './data.js?v=6';
+import { createGame, advanceTo, skipToNextClose, setControl, hire, letGo, answerQuestion, setApprovedLimit } from './sim/sim.js?v=6';
+import { DAY_START, DAY_END, tOf, dayOf, fmtDayLong, fmtClock, fmtDay, fmtT } from './sim/time.js?v=6';
+import { finalScore } from './sim/report.js?v=6';
+import { questionById } from './sim/weekly.js?v=6';
+import { draw, readColors, hitTest, W, H, ZONES, staffName } from './render/map.js?v=6';
+import * as P from './ui/panels.js?v=6';
+import * as M from './ui/modals.js?v=6';
 
 const SAVE_KEY = 'zenith-o2c-save-v1';
-const SPEEDS = [0, 2, 5, 10]; // game minutes per real second: pause, 1 day = 5 min, 2 min, 1 min
+const VERSION = 'v6';
+const SPEEDS = [0, 2, 4, 10, 20]; // game minutes per real second: pause, 1× (a 10-hour day = 5 min), 2×, 5×, 10× (30 s)
 const $ = (s) => document.querySelector(s);
 
 let s = null;
@@ -64,7 +65,6 @@ function setPanelHeight(pct) {
 }
 (function initDrawer() {
   setPanelWidth(settings.pw, true); setPanelHeight(settings.ph); setPanel(settings.drawer || 'half');
-  if (!settings.feed) $('.feedBar').classList.add('collapsed');
   const rz = $('#resizer');
   let dragging = false;
   rz.addEventListener('pointerdown', (e) => { dragging = true; rz.classList.add('drag'); rz.setPointerCapture(e.pointerId); e.preventDefault(); });
@@ -132,7 +132,8 @@ function afterAdvance() {
   if (s.newReport != null) {
     const m = s.newReport; s.newReport = null;
     saveGame(true);
-    if (!s.over) { setSpeed(0); openModal(M.reportModal(s, m), 'report'); return; }
+    // no pause: the report waits as a notification on the map
+    if (!s.over) { dock.report = m; drawDock(); }
   }
   if (s.over) { setSpeed(0); saveGame(true); openModal(M.finalModal(s), 'final'); return; }
   updateDock();
@@ -146,14 +147,16 @@ function render(force) {
   $('#timeLabel').textContent = fmtClock(s.t) + (speed ? '' : ' · paused');
   const cash = $('#cashLabel'); cash.textContent = P.n0(s.cash); cash.classList.toggle('neg', s.cash < 0);
   $('#strikeLabel').textContent = s.mode === 'campaign' ? `${s.strikes} / 2` : '—';
-  $('#modeLabel').textContent = s.mode === 'campaign' ? 'Campaign: March to June' : 'Sandbox';
+  $('#modeLabel').textContent = (s.mode === 'campaign' ? 'Campaign: March to June' : 'Sandbox') + ' · ' + VERSION;
   $('#pausedTag').hidden = true;
   document.body.classList.toggle('isPaused', !speed && !s.over);
   document.querySelectorAll('.sp').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.speed === speed)));
   // feed
   if (s.log.length !== lastLogLen || force) {
     lastLogLen = s.log.length;
-    $('#feed').innerHTML = s.log.slice(-12).reverse().map((l) => `<div class="ev k-${l.kind}" ${l.order ? `data-order="${l.order}" style="cursor:pointer"` : ''}><time>${fmtT(l.t)}</time><span>${escapeHtml(l.text)}</span></div>`).join('');
+    const l = s.log[s.log.length - 1];
+    const tk = $('#ticker');
+    if (l) { tk.className = 'ticker k-' + l.kind; tk.innerHTML = `<time>${fmtT(l.t)}</time> ${escapeHtml(l.text)}`; tk.classList.remove('flash'); void tk.offsetWidth; tk.classList.add('flash'); }
   }
   // tab badge
   const rb = document.querySelector('#tabs [data-tab="reports"] .dot');
@@ -180,6 +183,7 @@ function renderPanel(force) {
     case 'staff': h = P.staffTab(s); break;
     case 'reports': ui.seenReports = s.reports.length; h = P.reportsTab(s, s.over ? finalScore(s) : null); break;
     case 'learn': h = P.learnTab(s); break;
+    case 'events': h = P.eventsTab(s); break;
   }
   if (panel.dataset.html === h) return;
   panel.innerHTML = h; panel.dataset.html = h; panel.dataset.tab = ui.tab;
@@ -191,6 +195,7 @@ function buildTabs() {
   $('#tabs').innerHTML = P.TABS.map(([id, label]) => `<button role="tab" data-tab="${id}" aria-selected="${ui.tab === id}">${label}${id === 'reports' ? '<span class="dot" hidden>!</span>' : ''}</button>`).join('');
 }
 function setTab(id) {
+  if (settings.drawer === 'closed') setPanel('half');
   ui.tab = id;
   document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === id)));
   $('#panel').scrollTop = 0;
@@ -212,27 +217,41 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = fal
 
 function setSpeed(v) { speed = v; render(false); }
 // ---------- weekly questions: a notification dock that never pauses the game ----------
-const dock = { mode: 'pill', key: null, answered: null, timer: null };
+const dock = { mode: 'pill', key: null, answered: null, timer: null, report: null };
 function updateDock(force) {
-  const el = $('#qdock');
   const wr = s && s.settings.questions ? s.weekReview : null;
-  if (!wr || wr.idx >= wr.ids.length) { if (s && wr) s.weekReview = null; if (el.innerHTML) el.innerHTML = ''; dock.key = null; return; }
+  if (!wr || wr.idx >= wr.ids.length) {
+    if (s && wr) s.weekReview = null;
+    dock.key = null;
+    if (force || $('#qdock').dataset.q === '1') drawDock();
+    return;
+  }
   const key = wr.end + ':' + wr.ids.length;
   if (key !== dock.key) {
     // a new week's questions arrived: show a small toast, then fold it into a pill
-    const first = dock.key == null && !force;
     dock.key = key; dock.answered = null; wr.isNew = true;
-    if (dock.mode !== 'open' || first) dock.mode = 'toast';
+    if (dock.mode !== 'open') dock.mode = 'toast';
     clearTimeout(dock.timer);
     dock.timer = setTimeout(() => { if (dock.mode === 'toast') { dock.mode = 'pill'; drawDock(); } }, 9000);
+    drawDock(); return;
   }
   if (force) drawDock();
-  else if (!el.innerHTML) drawDock();
 }
 function drawDock() {
-  const wr = s.weekReview; if (!wr) { $('#qdock').innerHTML = ''; return; }
-  $('#qdock').innerHTML = M.dockHtml(s, wr, dock.mode, dock.answered);
+  const el = $('#qdock');
+  const wr = s && s.settings.questions ? s.weekReview : null;
+  let h = '';
+  if (dock.report != null && s && s.reports.find((r) => r.m === dock.report)) {
+    const r = s.reports.find((x) => x.m === dock.report);
+    h += `<div class="qcard rnote"><div class="qh"><b>📊 ${r.monthName} report is ready</b><button class="hideBtn" data-act="reportDismiss" title="Dismiss">✕</button></div>
+      <p>Score ${r.score}/100 · ${r.auditFail ? (r.auditWarning ? 'auditors: warning' : 'auditors: <b class="k-bad">strike</b>') : 'auditors: accepted'} · gap ${n0x(r.gap)}</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn small" data-act="reportOpen">Open report</button></div></div>`;
+  }
+  if (wr && wr.idx < wr.ids.length) h += M.dockHtml(s, wr, dock.mode, dock.answered);
+  el.dataset.q = wr ? '1' : '';
+  if (el.innerHTML !== h) el.innerHTML = h;
 }
+const n0x = (x) => Math.round(x).toLocaleString('en-US');
 
 // ---------- input ----------
 document.addEventListener('click', (e) => {
@@ -259,19 +278,21 @@ document.addEventListener('click', (e) => {
       $('#modal').innerHTML = M.questionModal(s, id, i);
       break;
     }
+    case 'reportOpen': { const m = dock.report; dock.report = null; drawDock(); openModal(M.reportModal(s, m), 'report'); break; }
+    case 'reportDismiss': dock.report = null; drawDock(); break;
     case 'dockOpen': if (s.weekReview) s.weekReview.isNew = false; dock.mode = 'open'; drawDock(); break;
     case 'dockHide': if (s.weekReview) s.weekReview.isNew = false; dock.mode = 'pill'; drawDock(); break;
     case 'wnext': {
       const wr = s.weekReview; if (!wr) break;
       wr.idx++; dock.answered = null;
-      if (wr.idx >= wr.ids.length) { s.weekReview = null; dock.key = null; $('#qdock').innerHTML = ''; toast('All caught up. New questions come at the end of next week.'); }
+      if (wr.idx >= wr.ids.length) { s.weekReview = null; dock.key = null; drawDock(); toast('All caught up. New questions come at the end of next week.'); }
       else drawDock();
       break;
     }
     case 'wskip': {
       const wr = s.weekReview;
       if (wr) for (const id of wr.ids.slice(wr.idx).reverse()) if (D.QUESTIONS[id] && !s.qPending.includes(id)) s.qPending.unshift(id);
-      s.weekReview = null; dock.key = null; $('#qdock').innerHTML = ''; toast('Skipped. Key concept questions will come back next week.');
+      s.weekReview = null; dock.key = null; drawDock(); toast('Skipped. Key concept questions will come back next week.');
       break;
     }
     case 'choose': {
@@ -333,19 +354,13 @@ $('#btnMonth').addEventListener('click', () => {
 $('#btnFull').addEventListener('click', () => {
   try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (e) { toast('Full screen is not available here.'); }
 });
-$('#feedToggle').addEventListener('click', () => {
-  const bar = $('.feedBar'); bar.classList.toggle('collapsed');
-  settings.feed = !bar.classList.contains('collapsed'); saveSettings();
-  $('#feedToggle').setAttribute('aria-expanded', String(settings.feed));
-  $('#feedToggle').textContent = settings.feed ? 'Latest events ▾' : 'Latest events ▸';
-});
 $('#btnMenu').addEventListener('click', () => { if (s) openModal(M.menuModal(s, settings), 'menu'); });
 document.addEventListener('keydown', (e) => {
   if (!s || e.target.closest('input,select,textarea')) return;
   if (e.key === 'Escape' && ui.modal && !['question', 'question-answered', 'start', 'final'].includes(ui.modal)) { closeModal(); return; }
   if (ui.modal) return;
   if (e.code === 'Space') { e.preventDefault(); setSpeed(speed ? 0 : (ui.lastSpeed || 1)); }
-  if (['1', '2', '3'].includes(e.key)) { ui.lastSpeed = +e.key; setSpeed(+e.key); }
+  if (['1', '2', '3', '4'].includes(e.key)) { ui.lastSpeed = +e.key; setSpeed(+e.key); }
 });
 
 // map interaction

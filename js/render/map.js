@@ -1,7 +1,7 @@
 // Draws the business on a canvas. Logical size 1000 × 620; scaled to fit.
-import * as D from '../data.js';
-import { dayOf, minOf, DAY_START } from '../sim/time.js';
-import { dealerBalance, dealerOverdue, headcount } from '../sim/sim.js';
+import * as D from '../data.js?v=6';
+import { dayOf, minOf, DAY_START } from '../sim/time.js?v=6';
+import { dealerBalance, dealerOverdue, headcount } from '../sim/sim.js?v=6';
 
 export const W = 1000, H = 620;
 export const ZONES = [
@@ -72,7 +72,7 @@ export function draw(ctx, s, ui) {
   const jumped = anim.lastT == null || Math.abs(t - anim.lastT) > 300 || anim.game !== s;
   anim.lastT = t; anim.game = s;
   spawnEffects(s, jumped, now);
-  computeStaff(s);
+  computeStaff(s, dt, jumped);
   drawInbox(ctx, s, now);
   drawErp(ctx, s);
   drawWarehouse(ctx, s, ui);
@@ -310,8 +310,8 @@ function drawOrders(ctx, s, ui, dt, jumped, now) {
     if (!z) continue;
     (groups[z] = groups[z] || []).push(o);
   }
-  const k = reduceMotion() || jumped ? 1 : 1 - Math.exp(-dt / 160);
-  const kc = reduceMotion() || jumped ? 1 : 1 - Math.exp(-dt / 50);
+  const k = reduceMotion() || jumped ? 1 : 1 - Math.exp(-dt / 380);
+  const kc = reduceMotion() || jumped ? 1 : 1 - Math.exp(-dt / 90);
   for (const [z, list] of Object.entries(groups)) {
     const [x0, y0, cols, rows] = AREA[z];
     const shown = list.slice(-cols * rows);
@@ -328,6 +328,17 @@ function drawOrders(ctx, s, ui, dt, jumped, now) {
       const kk = carried ? kc : k;
       v.x += (tx - v.x) * kk; v.y += (ty - v.y) * kk;
       live.add(o.id);
+      // announce where the order is going
+      const prevZone = anim.zoneOf.get(o.id);
+      if (prevZone !== z) {
+        anim.zoneOf.set(o.id, z);
+        if (prevZone !== undefined && !jumped && !reduceMotion()) {
+          const pct = Math.round(o.disc * 100);
+          const msg = { sales: `SE${(o.se ?? 0) + 1} enters ${o.id}`, sm: `${o.id} → Sales Manager: approve ${pct}%`, gm: `${o.id} → GM + FM: approve ${pct}%`,
+            erp: `${o.id} → ERP credit check`, hold: `${o.id} on credit hold`, wh: `${o.id} released → warehouse` }[z];
+          if (msg) anim.fx.push({ kind: 'label', x: tx + 23, y: ty - 6, text: msg, color: z === 'hold' ? 'bad' : z === 'wh' ? 'good' : z === 'sm' || z === 'gm' ? 'price' : 'ink', t0: performance.now(), dur: 2200 });
+        }
+      }
       const bad = o.flags.creditBreach || o.flags.discountBreach || o.flags.intakeError;
       const c = bad ? col('bad') : o.stage === 'held' || o.waitStock ? col('warn') : col('good');
       const x = v.x, y = v.y;
@@ -341,7 +352,15 @@ function drawOrders(ctx, s, ui, dt, jumped, now) {
     });
     if (list.length > cols * rows) text(ctx, `+${list.length - cols * rows} more`, x0 + cols * 50 - 6, y0 - 3, FB(700, 10), col('muted'), 'right');
   }
-  for (const id of anim.vis.keys()) if (!live.has(id)) anim.vis.delete(id);
+  for (const id of anim.vis.keys()) if (!live.has(id)) {
+    const o = s.orders.find((x) => x.id === id);
+    if (o && o.stage === 'transit' && !jumped && !reduceMotion()) {
+      const v = anim.vis.get(id);
+      anim.fx.push({ kind: 'box', x0: v.x + 23, y0: v.y + 9, x1: 930, y1: 196, t0: performance.now(), dur: 900, label: '' });
+      anim.fx.push({ kind: 'label', x: 935, y: 170, text: `${id} loaded on the truck`, color: 'bill', t0: performance.now(), dur: 2000 });
+    }
+    anim.vis.delete(id); anim.zoneOf.delete(id);
+  }
 }
 
 function drawTruck(ctx, s) {
@@ -395,9 +414,17 @@ function staffPos(s, role, i) {
   if (best.st === 'inbox' && t > best.e) return { x: home[0], y: home[1], job: null };
   return { x: home[0] + (sx - home[0]) * f, y: home[1] + (sy - home[1]) * f, job: t >= best.s && t <= best.e ? best : null };
 }
-function computeStaff(s) {
+function computeStaff(s, dt, jumped) {
   anim.staff = {};
-  for (const role of D.ROLE_IDS) for (let i = 0; i < headcount(s, role); i++) anim.staff[role + i] = staffPos(s, role, i);
+  const k = reduceMotion() || jumped ? 1 : 1 - Math.exp(-dt / 180);
+  for (const role of D.ROLE_IDS) for (let i = 0; i < headcount(s, role); i++) {
+    const p = staffPos(s, role, i);
+    // glide towards the target so people walk smoothly instead of jumping
+    let v = anim.staffVis.get(role + i);
+    if (!v) { v = { x: p.x, y: p.y }; anim.staffVis.set(role + i, v); }
+    v.x += (p.x - v.x) * k; v.y += (p.y - v.y) * k;
+    anim.staff[role + i] = { ...p, x: v.x, y: v.y, moving: Math.hypot(p.x - v.x, p.y - v.y) > 2 };
+  }
 }
 export const staffHits = [];
 function drawStaff(ctx, s, ui) {
@@ -408,6 +435,8 @@ function drawStaff(ctx, s, ui) {
       const p = anim.staff[role + i] || staffPos(s, role, i);
       const busy = !!p.job;
       const name = staffName(role, i);
+      const bob = p.moving ? Math.sin(performance.now() / 70) * 1.5 : 0;
+      p.y += bob;
       ctx.beginPath(); ctx.arc(p.x, p.y, 12, 0, 7);
       ctx.fillStyle = D.ROLES[role].color; ctx.fill();
       ctx.lineWidth = 2.5; ctx.strokeStyle = busy ? col('warn') : col('zone'); ctx.stroke();
@@ -425,7 +454,7 @@ function drawStaff(ctx, s, ui) {
 }
 
 // ---------- small real-time effects ----------
-const anim = { vis: new Map(), staff: {}, fx: [], msgSeen: new Map(), seen: null, lastNow: 0, lastT: null, game: null };
+const anim = { vis: new Map(), staffVis: new Map(), zoneOf: new Map(), staff: {}, fx: [], msgSeen: new Map(), seen: null, lastNow: 0, lastT: null, game: null };
 const easeOut = (x) => 1 - Math.pow(1 - x, 3);
 let rm = null;
 function reduceMotion() { if (rm == null) { rm = matchMedia('(prefers-reduced-motion: reduce)'); } return rm.matches; }
@@ -438,7 +467,10 @@ function spawnEffects(s, jumped, now) {
     return;
   }
   const off = reduceMotion();
-  for (const m of s.inbox) if (!anim.msgSeen.has(m.t + m.order)) anim.msgSeen.set(m.t + m.order, now);
+  for (const m of s.inbox) if (!anim.msgSeen.has(m.t + m.order)) {
+    anim.msgSeen.set(m.t + m.order, now + 600);
+    if (!off) anim.fx.push({ kind: 'mail', x0: -20, y0: 60, x1: 96, y1: 110, t0: now, dur: 650, label: D.DEALERS[m.dealer] ? D.DEALERS[m.dealer].short : '' });
+  }
   if (!off) {
     for (const r of s.receipts.slice(anim.seen.rec)) {
       const [x, y] = dealerSpot(r.dealer);
@@ -466,6 +498,25 @@ function drawEffects(ctx, now) {
     const p = (now - f.t0) / f.dur;
     if (p < 0) continue;
     const e = easeOut(p);
+    if (f.kind === 'label') {
+      const a = p < 0.1 ? p / 0.1 : p > 0.75 ? (1 - p) / 0.25 : 1;
+      ctx.globalAlpha = Math.max(0, a);
+      ctx.font = FB(700, 11.5); const w = ctx.measureText(f.text).width + 14;
+      const x = Math.max(4, Math.min(W - w - 4, f.x - w / 2)), y = f.y - 14 - e * 14;
+      rr(ctx, x, y - 13, w, 19, 9); ctx.fillStyle = col(f.color === 'ink' ? 'ink' : f.color); ctx.fill();
+      text(ctx, f.text, x + 7, y + 1, FB(700, 11.5), f.color === 'ink' ? col('bg') : '#fff');
+      ctx.globalAlpha = 1;
+      continue;
+    }
+    if (f.kind === 'mail') {
+      const x = f.x0 + (f.x1 - f.x0) * e, y = f.y0 + (f.y1 - f.y0) * e;
+      ctx.globalAlpha = p > 0.85 ? (1 - p) / 0.15 : 1;
+      rr(ctx, x - 12, y - 8, 24, 16, 3); ctx.fillStyle = '#25D366'; ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 10, y - 6); ctx.lineTo(x, y + 1); ctx.lineTo(x + 10, y - 6); ctx.stroke();
+      if (f.label) text(ctx, f.label, x + 15, y - 8, FB(700, 10.5), col('ink'));
+      ctx.globalAlpha = 1;
+      continue;
+    }
     if (f.kind === 'ring') {
       const x = (f.order.__vx ?? 500) + 23, y = (f.order.__vy ?? 300) + 9;
       ctx.beginPath(); ctx.arc(x, y, 12 + 30 * e, 0, 7); ctx.lineWidth = 3; ctx.strokeStyle = col('bad'); ctx.globalAlpha = 1 - p; ctx.stroke(); ctx.globalAlpha = 1;

@@ -1,6 +1,6 @@
 // Month-end report: KPIs, the two sets of books, what went wrong, score.
-import * as D from '../data.js';
-import { monthOf, monthFirst, monthLast, monthName, fmtDay } from './time.js';
+import * as D from '../data.js?v=6';
+import { monthOf, monthFirst, monthLast, monthName, fmtDay } from './time.js?v=6';
 
 const sum = (arr, f) => arr.reduce((a, x) => a + f(x), 0);
 const n0 = (x) => Math.round(x).toLocaleString('en-US');

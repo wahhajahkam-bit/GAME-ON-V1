@@ -68,7 +68,7 @@ body { height: 100dvh; overflow: hidden; }
 .paused { display: none; }
 .feedBar { flex: none; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .feedToggle { border: none; background: transparent; font-weight: 700; font-size: 12px; color: var(--muted); padding: 4px 12px; width: 100%; text-align: left; }
-.feed { padding: 0 12px 6px; display: grid; gap: 2px; font-size: 13px; max-height: 66px; overflow: auto; }
+.feed { display: grid; gap: 4px; font-size: 13px; }
 .feedBar.collapsed .feed { display: none; }
 .feed .ev { display: grid; grid-template-columns: 92px 1fr; gap: 8px; }
 .feed .ev time { font: 500 12px var(--fm); color: var(--muted); }
@@ -233,7 +233,8 @@ input[type=number], select { font: inherit; padding: 4px 6px; border: 1.5px soli
 .progress i.done { background: var(--good); } .progress i.now { background: var(--rev); }
 
 /* question notification dock (does not pause the game) */
-.qdock { position: absolute; left: 12px; bottom: 12px; z-index: 6; max-width: min(380px, calc(100% - 24px)); }
+.qdock { position: absolute; left: 12px; bottom: 12px; z-index: 6; max-width: min(380px, calc(100% - 24px)); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.qcard.rnote { border-left-color: var(--good); width: 100%; }
 .qdock:empty { display: none; }
 .qpill { display: flex; align-items: center; gap: 8px; border: none; background: var(--rev); color: #fff; font-weight: 700; font-size: 13px; padding: 8px 14px; border-radius: 99px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
 :root[data-theme="dark"] .qpill { color: #0E1424; }
@@ -254,3 +255,11 @@ input[type=number], select { font: inherit; padding: 4px 6px; border: 1.5px soli
 .qcard .hideBtn { border: none; background: var(--soft); border-radius: 7px; padding: 3px 9px; font-weight: 700; font-size: 12px; }
 @media (prefers-reduced-motion: reduce) { .qpill.new { animation: none; } }
 @media (max-width: 760px) { .qdock { left: 8px; right: 8px; bottom: 8px; max-width: none; } }
+
+/* one-line event ticker over the map */
+.ticker { position: absolute; right: 12px; bottom: 12px; z-index: 5; max-width: min(560px, calc(100% - 330px)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 92%, transparent); border-radius: 99px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+.ticker:empty { display: none; }
+.ticker time { font: 500 11.5px var(--fm); color: var(--muted); margin-right: 6px; }
+.ticker.flash { animation: tick .6s ease-out; }
+@keyframes tick { from { background: color-mix(in srgb, var(--warn) 25%, var(--surface)); } }
+@media (max-width: 760px) { .ticker { left: 8px; right: 8px; bottom: 56px; max-width: none; } }

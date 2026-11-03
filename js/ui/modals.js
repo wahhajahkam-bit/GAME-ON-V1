@@ -1,10 +1,10 @@
 // Modal windows: start, question, order detail, dealer, month report, final, menu, change confirm.
-import * as D from '../data.js';
-import { dayOf, fmtDay, fmtT, monthName } from '../sim/time.js';
-import { dealerBalance, dealerOverdue, findOption, findControl } from '../sim/sim.js';
-import { finalScore } from '../sim/report.js';
-import { questionById } from '../sim/weekly.js';
-import { n0, fmtK } from './panels.js';
+import * as D from '../data.js?v=6';
+import { dayOf, fmtDay, fmtT, monthName } from '../sim/time.js?v=6';
+import { dealerBalance, dealerOverdue, findOption, findControl } from '../sim/sim.js?v=6';
+import { finalScore } from '../sim/report.js?v=6';
+import { questionById } from '../sim/weekly.js?v=6';
+import { n0, fmtK } from './panels.js?v=6';
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pct = (x) => Math.round(x * 100) + '%';

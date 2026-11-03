@@ -1,9 +1,9 @@
 // The business engine. Pure logic, no drawing. Event-driven: every action in the company is an
 // event at a game time. The same engine runs in the browser and in the Node test.
-import * as D from '../data.js';
-import { DAY_START, DAY_END, DAYMIN, tOf, dayOf, minOf, monthOf, monthFirst, monthLast, fmtDay } from './time.js';
-import { computeMonthReport } from './report.js';
-import { buildWeeklyReview, questionById } from './weekly.js';
+import * as D from '../data.js?v=6';
+import { DAY_START, DAY_END, DAYMIN, tOf, dayOf, minOf, monthOf, monthFirst, monthLast, fmtDay } from './time.js?v=6';
+import { computeMonthReport } from './report.js?v=6';
+import { buildWeeklyReview, questionById } from './weekly.js?v=6';
 
 // ---------- random numbers (seeded, saved in the state) ----------
 export function rand(s) {

@@ -1,10 +1,10 @@
 // Side-panel tabs. Each function returns HTML for the panel.
-import * as D from '../data.js';
-import { dayOf, monthOf, monthFirst, fmtDay, fmtT, monthName } from '../sim/time.js';
-import { dealerBalance, dealerOverdue, oldestOverdueDays, snapshot, findOption, canChoose, headcount, suggestedLimit } from '../sim/sim.js';
-import { computeMonthReport, stars } from '../sim/report.js';
-import { questionById } from '../sim/weekly.js';
-import { staffName } from '../render/map.js';
+import * as D from '../data.js?v=6';
+import { dayOf, monthOf, monthFirst, fmtDay, fmtT, monthName } from '../sim/time.js?v=6';
+import { dealerBalance, dealerOverdue, oldestOverdueDays, snapshot, findOption, canChoose, headcount, suggestedLimit } from '../sim/sim.js?v=6';
+import { computeMonthReport, stars } from '../sim/report.js?v=6';
+import { questionById } from '../sim/weekly.js?v=6';
+import { staffName } from '../render/map.js?v=6';
 
 export const n0 = (x) => (x == null ? '–' : Math.round(x).toLocaleString('en-US'));
 const pct = (x) => (x == null ? '–' : Math.round(x * 100) + '%');
@@ -15,7 +15,7 @@ const curMonth = (s) => monthOf(dayOf(s.t));
 
 export const TABS = [
   ['steps', 'Steps'], ['erp', 'ERP'], ['orders', 'Orders'], ['books', 'Books'], ['kpis', 'KPIs'],
-  ['charts', 'Charts'], ['staff', 'Staff'], ['reports', 'Reports'], ['learn', 'Learn'],
+  ['charts', 'Charts'], ['staff', 'Staff'], ['events', 'Events'], ['reports', 'Reports'], ['learn', 'Learn'],
 ];
 
 // ---------- Steps ----------
@@ -338,4 +338,10 @@ export function learnTab(s) {
   <p class="lead">At the end of each week you get a short review: about 5 questions about what really happened that week. Tap one to read the answer again. Key moments still to come: ${left}.</p>
   <div class="card"><h3>Your questions</h3>${ans ? `<table><tr><th>When</th><th>Question</th><th>Result</th></tr>${ans}</table>` : '<span class="hint">None yet. The first weekly review comes on 7 March.</span>'}</div>
   <div class="cards">${D.CONCEPTS.map((c) => `<div class="cc" style="--c:var(--${c.c})"><h3>${c.t}</h3><div>${c.d}</div><div class="f">${c.f}</div><div class="hint"><b>Here:</b> ${c.ex}</div></div>`).join('')}</div>`;
+}
+
+// ---------- Events ----------
+export function eventsTab(s) {
+  const rows = s.log.slice(-150).reverse().map((l) => `<div class="ev k-${l.kind}" ${l.order ? `data-order="${l.order}" style="cursor:pointer"` : ''}><time>${fmtT(l.t)}</time><span>${esc(l.text)}</span></div>`).join('');
+  return `<div class="ph"><h2>Events</h2><span class="hint">Newest first · tap an order event to follow it</span></div><div class="feed">${rows}</div>`;
 }
