@@ -3,7 +3,8 @@ import * as D from './data.js';
 import { createGame, advanceTo, skipToNextClose, setControl, hire, letGo, answerQuestion, setApprovedLimit } from './sim/sim.js';
 import { DAY_START, DAY_END, tOf, dayOf, fmtDayLong, fmtClock, fmtDay, fmtT } from './sim/time.js';
 import { finalScore } from './sim/report.js';
-import { draw, readColors, hitTest, W, H, ZONES } from './render/map.js';
+import { questionById } from './sim/weekly.js';
+import { draw, readColors, hitTest, W, H, ZONES, staffName } from './render/map.js';
 import * as P from './ui/panels.js';
 import * as M from './ui/modals.js';
 
@@ -14,25 +15,71 @@ const $ = (s) => document.querySelector(s);
 let s = null;
 let speed = 0;
 let ui = { tab: 'steps', openStep: null, hover: null, hoverOrder: null, hoverStaff: null, orderFilter: 'month', modal: null };
-const settings = { sound: false, theme: '' };
-try { Object.assign(settings, JSON.parse(localStorage.getItem('zenith-o2c-settings') || '{}')); } catch (e) { /* storage blocked */ }
+const settings = { sound: false, theme: '', drawer: 'half', pw: 520, ph: 55, feed: true };
+let savedSettings = {};
+try { savedSettings = JSON.parse(localStorage.getItem('zenith-o2c-settings') || '{}'); Object.assign(settings, savedSettings); } catch (e) { /* storage blocked */ }
+if (!savedSettings.drawer && window.innerWidth <= 760) settings.drawer = 'closed'; // phones start with the map
 const saveSettings = () => { try { localStorage.setItem('zenith-o2c-settings', JSON.stringify(settings)); } catch (e) { /* ignore */ } };
 applyTheme();
 
 const canvas = $('#map');
 const ctx = canvas.getContext('2d');
 
-// ---------- canvas sizing ----------
-const MIN_MAP_W = 760; // below this the map scrolls sideways inside its frame
+// ---------- canvas sizing: fill the map area, keep the 1000 × 620 shape ----------
+const layout = $('#layout');
+const wrap = $('#canvasWrap');
 function resize() {
-  const w = Math.max(canvas.parentElement.clientWidth, MIN_MAP_W);
-  canvas.style.width = w + 'px';
+  const aw = wrap.clientWidth - 2, ah = wrap.clientHeight - 2;
+  if (aw <= 0 || ah <= 0) return;
+  let w = Math.min(aw, ah * W / H);
+  const minW = window.innerWidth <= 760 ? 760 : 560; // below this the text is too small: the frame scrolls instead
+  if (w < minW) w = minW;
+  const h = w * H / W;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  canvas.style.height = (w * H / W) + 'px';
-  canvas.width = Math.round(w * dpr); canvas.height = Math.round(w * H / W * dpr);
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
   ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+  wrap.style.placeItems = w > aw || h > ah ? 'start' : 'center';
 }
-window.addEventListener('resize', () => { resize(); if (s) render(true); });
+new ResizeObserver(() => resize()).observe(wrap);
+window.addEventListener('resize', () => { document.documentElement.style.setProperty('--hudh', $('#hud').offsetHeight + 'px'); setPanelWidth(settings.pw, true); });
+
+// ---------- the side panel (drawer): closed / half / full, resizable ----------
+function setPanel(state) {
+  settings.drawer = state; saveSettings();
+  layout.dataset.drawer = state;
+  document.querySelectorAll('.pc').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.panel === state)));
+  document.documentElement.style.setProperty('--hudh', $('#hud').offsetHeight + 'px');
+  if (state !== 'closed' && s) render(true);
+}
+function setPanelWidth(px, quiet) {
+  const max = Math.max(320, layout.clientWidth - 240);
+  settings.pw = Math.round(Math.max(300, Math.min(max, px)));
+  layout.style.setProperty('--pw', settings.pw + 'px');
+  if (!quiet) saveSettings();
+}
+function setPanelHeight(pct) {
+  settings.ph = Math.round(Math.max(25, Math.min(90, pct)));
+  layout.style.setProperty('--ph', settings.ph + 'dvh'); saveSettings();
+}
+(function initDrawer() {
+  setPanelWidth(settings.pw, true); setPanelHeight(settings.ph); setPanel(settings.drawer || 'half');
+  if (!settings.feed) $('.feedBar').classList.add('collapsed');
+  const rz = $('#resizer');
+  let dragging = false;
+  rz.addEventListener('pointerdown', (e) => { dragging = true; rz.classList.add('drag'); rz.setPointerCapture(e.pointerId); e.preventDefault(); });
+  rz.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    if (window.innerWidth <= 760) setPanelHeight((window.innerHeight - e.clientY) / window.innerHeight * 100);
+    else setPanelWidth(layout.getBoundingClientRect().right - e.clientX - 8);
+  });
+  const end = () => { if (dragging) { dragging = false; rz.classList.remove('drag'); saveSettings(); } };
+  rz.addEventListener('pointerup', end); rz.addEventListener('pointercancel', end);
+  rz.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') setPanelWidth(settings.pw + 40);
+    if (e.key === 'ArrowRight') setPanelWidth(settings.pw - 40);
+  });
+})();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readColors(); });
 
 // ---------- start ----------
@@ -51,7 +98,8 @@ function loadGame() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) { toast('No saved game found.'); return false; }
-    s = JSON.parse(raw); speed = 0; lastLogLen = s.log.length; closeModal(); buildTabs(); render(true); toast('Game loaded.');
+    s = JSON.parse(raw); speed = 0; lastLogLen = s.log.length;
+    s.qPending = s.qPending || s.qQueue || []; delete s.qQueue; s.dynQ = s.dynQ || {}; s.weekReview = s.weekReview || null; closeModal(); buildTabs(); render(true); toast('Game loaded.');
     return true;
   } catch (e) { toast('Could not load the saved game.'); return false; }
 }
@@ -86,7 +134,7 @@ function afterAdvance() {
     if (!s.over) { setSpeed(0); openModal(M.reportModal(s, m), 'report'); return; }
   }
   if (s.over) { setSpeed(0); saveGame(true); openModal(M.finalModal(s), 'final'); return; }
-  if (s.qQueue.length && s.settings.questions) { setSpeed(0); openModal(M.questionModal(s.qQueue[0]), 'question'); }
+  if (s.weekReview && s.settings.questions) { setSpeed(0); openWeekly(); }
 }
 
 // ---------- rendering ----------
@@ -104,7 +152,7 @@ function render(force) {
   // feed
   if (s.log.length !== lastLogLen || force) {
     lastLogLen = s.log.length;
-    $('#feed').innerHTML = s.log.slice(-8).reverse().map((l) => `<div class="ev k-${l.kind}" ${l.order ? `data-order="${l.order}" style="cursor:pointer"` : ''}><time>${fmtT(l.t)}</time><span>${escapeHtml(l.text)}</span></div>`).join('');
+    $('#feed').innerHTML = s.log.slice(-12).reverse().map((l) => `<div class="ev k-${l.kind}" ${l.order ? `data-order="${l.order}" style="cursor:pointer"` : ''}><time>${fmtT(l.t)}</time><span>${escapeHtml(l.text)}</span></div>`).join('');
   }
   // tab badge
   const rb = document.querySelector('#tabs [data-tab="reports"] .dot');
@@ -114,6 +162,7 @@ function render(force) {
 const escapeHtml = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 function renderPanel(force) {
+  if (settings.drawer === 'closed') return;
   const panel = $('#panel');
   const active = document.activeElement;
   if (!force && active && panel.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'SELECT')) return;
@@ -147,6 +196,7 @@ function setTab(id) {
   render(true);
 }
 function openStep(stepId) {
+  if (settings.drawer === 'closed') setPanel('half');
   ui.openStep = stepId; setTab('steps');
   requestAnimationFrame(() => { const el = document.querySelector(`[data-step="${stepId}"]`); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
 }
@@ -155,21 +205,28 @@ function openStep(stepId) {
 function openModal(html, kind) { ui.modal = kind || 'modal'; $('#modal').innerHTML = html; $('#modalBack').hidden = false; $('#modal').scrollTop = 0; }
 function closeModal() {
   const was = ui.modal; ui.modal = null; $('#modalBack').hidden = true; $('#modal').innerHTML = '';
-  if (s && !s.over && was !== 'start' && s.qQueue.length && s.settings.questions) openModal(M.questionModal(s.qQueue[0]), 'question');
+  if (s && !s.over && !['start', 'question', 'question-answered'].includes(was) && s.weekReview && s.settings.questions) openWeekly();
 }
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, 3200); }
 
 function setSpeed(v) { speed = v; render(false); }
+function openWeekly() {
+  const wr = s.weekReview;
+  if (!wr || wr.idx >= wr.ids.length) { s.weekReview = null; return; }
+  openModal(M.weeklyModal(s, wr, wr.ids[wr.idx], null), 'question');
+}
 
 // ---------- input ----------
 document.addEventListener('click', (e) => {
-  const el = e.target.closest('[data-act],[data-tab],[data-order],[data-report],[data-q],[data-speed]');
-  if (!el) { if (e.target === $('#modalBack') && ui.modal !== 'question' && ui.modal !== 'start' && ui.modal !== 'final') closeModal(); return; }
+  const el = e.target.closest('[data-act],[data-tab],[data-order],[data-report],[data-q],[data-speed],button[data-panel],button[data-size]');
+  if (!el) { if (e.target === $('#modalBack') && !['question', 'question-answered', 'start', 'final'].includes(ui.modal)) closeModal(); return; }
   if (el.matches('.sp')) { if (!s || s.over) return; setSpeed(+el.dataset.speed); return; }
+  if (el.dataset.panel) { setPanel(el.dataset.panel); return; }
+  if (el.dataset.size) { if (settings.drawer !== 'half') setPanel('half'); setPanelWidth(settings.pw + 80 * +el.dataset.size); return; }
   if (el.dataset.tab && !el.dataset.act) { setTab(el.dataset.tab); return; }
   if (el.dataset.order && !el.dataset.act) { openModal(M.orderModal(s, el.dataset.order), 'order'); return; }
   if (el.dataset.report != null && !el.dataset.act) { openModal(M.reportModal(s, +el.dataset.report), 'report'); return; }
-  if (el.dataset.q && !el.dataset.act) { const a = s.answers.find((x) => x.id === el.dataset.q); openModal(M.questionModal(el.dataset.q, a ? a.choice : null), 'review'); return; }
+  if (el.dataset.q && !el.dataset.act) { const a = s.answers.find((x) => x.id === el.dataset.q); openModal(M.questionModal(s, el.dataset.q, a ? a.choice : null), 'review'); return; }
   const act = el.dataset.act;
   switch (act) {
     case 'close': closeModal(); break;
@@ -180,8 +237,20 @@ document.addEventListener('click', (e) => {
     case 'answer': {
       const id = el.dataset.q, i = +el.dataset.i;
       answerQuestion(s, id, i);
-      ui.modal = 'question-answered';
-      $('#modal').innerHTML = M.questionModal(id, i);
+      if (ui.modal === 'question' && s.weekReview) { ui.modal = 'question-answered'; $('#modal').innerHTML = M.weeklyModal(s, s.weekReview, id, i); }
+      else $('#modal').innerHTML = M.questionModal(s, id, i);
+      break;
+    }
+    case 'wnext': {
+      const wr = s.weekReview; if (!wr) { closeModal(); break; }
+      wr.idx++;
+      if (wr.idx < wr.ids.length) openWeekly(); else { s.weekReview = null; closeModal(); toast('Weekly review done. Press play to continue.'); }
+      break;
+    }
+    case 'wskip': {
+      const wr = s.weekReview;
+      if (wr) for (const id of wr.ids.slice(wr.idx).reverse()) if (D.QUESTIONS[id] && !s.qPending.includes(id)) s.qPending.unshift(id);
+      s.weekReview = null; closeModal(); toast('Skipped. Unseen concept questions will come next week.');
       break;
     }
     case 'choose': {
@@ -206,7 +275,7 @@ document.addEventListener('click', (e) => {
     case 'sandbox': s.mode = 'sandbox'; s.over = null; closeModal(); toast('Sandbox: the business keeps running.'); render(true); break;
     case 'tab': closeModal(); setTab(el.dataset.tab); break;
     case 'theme': settings.theme = el.dataset.theme; saveSettings(); applyTheme(); toast('Theme changed.'); break;
-    case 'toggleQ': s.settings.questions = el.checked; break;
+    case 'toggleQ': s.settings.questions = el.checked; if (!el.checked) s.weekReview = null; break;
     case 'toggleSound': settings.sound = el.checked; saveSettings(); break;
   }
 });
@@ -238,12 +307,21 @@ $('#btnMonth').addEventListener('click', () => {
   const qs = s.settings.questions;
   skipToNextClose(s);
   afterAdvance(); render(true);
-  if (qs && s.qQueue.length > 1) toast(`${s.qQueue.length} finance questions are waiting.`);
+  if (qs && s.weekReview) toast('Weekly review for the last week of the month is ready.');
+});
+$('#btnFull').addEventListener('click', () => {
+  try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (e) { toast('Full screen is not available here.'); }
+});
+$('#feedToggle').addEventListener('click', () => {
+  const bar = $('.feedBar'); bar.classList.toggle('collapsed');
+  settings.feed = !bar.classList.contains('collapsed'); saveSettings();
+  $('#feedToggle').setAttribute('aria-expanded', String(settings.feed));
+  $('#feedToggle').textContent = settings.feed ? 'Latest events ▾' : 'Latest events ▸';
 });
 $('#btnMenu').addEventListener('click', () => { if (s) openModal(M.menuModal(s, settings), 'menu'); });
 document.addEventListener('keydown', (e) => {
   if (!s || e.target.closest('input,select,textarea')) return;
-  if (e.key === 'Escape' && ui.modal && !['question', 'start', 'final'].includes(ui.modal)) { closeModal(); return; }
+  if (e.key === 'Escape' && ui.modal && !['question', 'question-answered', 'start', 'final'].includes(ui.modal)) { closeModal(); return; }
   if (ui.modal) return;
   if (e.code === 'Space') { e.preventDefault(); setSpeed(speed ? 0 : (ui.lastSpeed || 1)); }
   if (['1', '2', '3'].includes(e.key)) { ui.lastSpeed = +e.key; setSpeed(+e.key); }
@@ -266,7 +344,7 @@ canvas.addEventListener('click', (e) => {
   if (!h) return;
   if (h.kind === 'order') openModal(M.orderModal(s, h.id), 'order');
   else if (h.kind === 'dealer') openModal(M.dealerModal(s, h.id), 'dealer');
-  else if (h.kind === 'staff') { ui.hoverStaff = { role: h.role, i: h.i }; toast(`${D.ROLES[h.role].name}: ${h.job ? h.job.lab : 'free right now'}`); }
+  else if (h.kind === 'staff') { ui.hoverStaff = { role: h.role, i: h.i }; toast(`${staffName(h.role, h.i)} (${D.ROLES[h.role].name}): ${h.job ? h.job.lab : 'free right now'}`); }
   else if (h.kind === 'zone') { if (h.tab) setTab(h.tab); else if (h.id === 'project') setTab('books'); else if (h.step) openStep(h.step); }
 });
 

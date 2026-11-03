@@ -24,21 +24,41 @@
     <div class="stats">
       <div class="stat"><small>Cash in bank</small><b id="cashLabel" class="mono">200,000</b></div>
       <div class="stat"><small>Audit strikes</small><b id="strikeLabel">0 / 2</b></div>
+      <div class="panelCtl" role="group" aria-label="Side panel size">
+        <button class="act pc" data-panel="closed" title="Close the panel: map full screen">Map only</button>
+        <button class="act pc" data-panel="half" title="Panel on the side">Half</button>
+        <button class="act pc" data-panel="full" title="Panel full screen">Full</button>
+      </div>
+      <button id="btnFull" class="act" title="Browser full screen">⛶</button>
       <button id="btnMenu" class="act" aria-haspopup="dialog">Menu</button>
     </div>
   </header>
 
-  <main class="layout">
+  <main class="layout" id="layout" data-drawer="half">
     <section class="stage" aria-label="Business map">
-      <div class="canvasWrap"><canvas id="map" aria-label="Map of Zenith Cooling Supplies: orders, staff, warehouse, truck and bank"></canvas>
-        <div class="paused" id="pausedTag">Paused: inspect anything, then press play</div>
+      <div class="canvasWrap" id="canvasWrap"><canvas id="map" aria-label="Map of Zenith Cooling Supplies: orders, staff, warehouse, truck and bank"></canvas>
+        <div class="paused" id="pausedTag" hidden></div>
       </div>
-      <div class="feed" id="feed" aria-live="polite"></div>
+      <div class="feedBar">
+        <button class="feedToggle" id="feedToggle" aria-expanded="true" title="Show or hide the latest events">Latest events ▾</button>
+        <div class="feed" id="feed" aria-live="polite"></div>
+      </div>
     </section>
-    <aside class="side">
-      <nav class="tabs" id="tabs" role="tablist"></nav>
+    <div class="resizer" id="resizer" role="separator" aria-orientation="vertical" aria-label="Drag to resize the panel" tabindex="0"></div>
+    <aside class="side" id="side">
+      <div class="sideHead">
+        <nav class="tabs" id="tabs" role="tablist"></nav>
+        <div class="sideBtns" role="group" aria-label="Panel size">
+          <button class="sb" data-size="-1" title="Narrower">−</button>
+          <button class="sb" data-size="1" title="Wider">+</button>
+          <button class="sb pc" data-panel="half" title="Half">◧</button>
+          <button class="sb pc" data-panel="full" title="Full">▣</button>
+          <button class="sb pc" data-panel="closed" title="Close">✕</button>
+        </div>
+      </div>
       <div class="panel" id="panel"></div>
     </aside>
+    <button class="reopen pc" id="reopen" data-panel="half" title="Open the panel">◂ Panel</button>
   </main>
 
   <div class="modalBack" id="modalBack" hidden>

@@ -3,6 +3,7 @@
 import * as D from '../data.js';
 import { DAY_START, DAY_END, DAYMIN, tOf, dayOf, minOf, monthOf, monthFirst, monthLast, fmtDay } from './time.js';
 import { computeMonthReport } from './report.js';
+import { buildWeeklyReview, questionById } from './weekly.js';
 
 // ---------- random numbers (seeded, saved in the state) ----------
 export function rand(s) {
@@ -28,7 +29,7 @@ export function createGame({ mode = 'campaign', seed = 20250301, questions = tru
     dealers: {}, stock: {}, onOrder: {}, purchases: [],
     orders: [], deliveries: [], invoices: [], receipts: [], creditNotes: [], mdChanges: [], overrides: [],
     expenses: [], cash: D.OPENING_CASH, cap: {}, jobs: [], truck: [], log: [], inbox: [],
-    qQueue: [], asked: {}, answers: [], reports: [], monthEnd: {}, daily: [], strikes: 0,
+    qPending: [], weekReview: null, dynQ: {}, asked: {}, answers: [], reports: [], monthEnd: {}, daily: [], strikes: 0,
     over: null, seq: { inv: 901, dn: 501, r: 1, o: 110, cn: 1, p: 1, pinv: 1 },
     project: null, generated: { 0: true }, settings: { questions }, flags: {}, changeLog: [],
   };
@@ -104,7 +105,7 @@ function olog(s, o, text, money) { o.log.push({ t: s.t, text, money: money || nu
 function ask(s, id) {
   if (s.asked[id]) return;
   s.asked[id] = true;
-  if (s.settings.questions) s.qQueue.push(id);
+  s.qPending.push(id);
 }
 const C = (s) => s.controls;
 export const headcount = (s, role) => s.staff[role] || 0;
@@ -122,11 +123,16 @@ export function book(s, role0, hours, t0, station, label) {
   if (m >= DAY_END) { d++; m = DAY_START; }
   const cap = (DAY_END - DAY_START) / 60;
   for (let guard = 0; guard < 400; guard++) {
-    let best = 0, bestUsed = 1e9;
-    for (let i = 0; i < n; i++) { const u = s.cap[role + i + ':' + d] || 0; if (u < bestUsed) { best = i; bestUsed = u; } }
+    // least-busy person; ties rotate so work is shared (SE1, SE2, SE1, ...)
+    s.rr = s.rr || {};
+    const first = (s.rr[role] || 0) % n;
+    let best = first, bestUsed = 1e9;
+    for (let k = 0; k < n; k++) { const i = (first + k) % n; const u = s.cap[role + i + ':' + d] || 0; if (u < bestUsed) { best = i; bestUsed = u; } }
     const start = Math.max(m, DAY_START + bestUsed * 60);
     if (bestUsed + hours <= cap + 0.01 && start + hours * 60 <= DAY_END + 0.5) {
       s.cap[role + best + ':' + d] = (start - DAY_START) / 60 + hours;
+      s.lastStaff = best;
+      s.rr[role] = best + 1;
       const st = tOf(d, start), en = tOf(d, start + hours * 60);
       if (hours > 0) s.jobs.push({ r: role, i: best, st: station, s: st, e: en, lab: label });
       return en;
@@ -284,6 +290,7 @@ const HANDLERS = {
   DAY_END(s) {
     const d = dayOf(s.t);
     s.daily.push(snapshot(s, d));
+    if (d % 7 === 6 && s.settings.questions) buildWeeklyReview(s, d);
     if (s.daily.length > 800) s.daily.shift();
     if (s.mode === 'campaign' && s.cash < 0) {
       s.over = { result: 'lose', reason: `Cash in the bank fell below zero on ${fmtDay(d)}. Zenith could not pay its bills.` };
@@ -324,7 +331,12 @@ const HANDLERS = {
       }
     }
     if (o.channel === 'portal') sat(s, o.dealer, 0.5);
-    const done = enterH ? book(s, 'SE', enterH, s.t + delay, 'sales', 'Enter ' + o.id) : s.t + delay;
+    const done = enterH ? book(s, 'SE', enterH, s.t + delay, 'inbox', 'Enter ' + o.id) : s.t + delay;
+    if (enterH) {
+      o.se = s.lastStaff;
+      olog(s, o, `SE${o.se + 1} (Sales Executive ${o.se + 1}) takes the order and types it into the ERP.`);
+      log(s, `SE${o.se + 1} takes ${o.id} from ${dd.short}.`, 'info', { order: o.id });
+    }
     schedule(s, done, 'ORDER_ENTERED', { order: o.id });
   },
 
@@ -747,7 +759,9 @@ function release(s, o, by, why) {
   let shipDay = dayOf(s.t) + 1;
   if (o.requestedDay != null) shipDay = Math.max(shipDay, o.requestedDay);
   const picked = book(s, 'WH', 1.5, tOf(shipDay, DAY_START), 'warehouse', 'Pick ' + o.id);
+  o.wh = s.lastStaff;
   const dTruck = book(s, 'DR', 3, Math.max(picked, tOf(dayOf(picked), 10 * 60)), 'truck', 'Deliver ' + o.id);
+  o.dr = s.lastStaff;
   const shipT = Math.max(picked, dTruck - 180);
   o.waitH += Math.max(0, (dayOf(shipT) - shipDay)) * 10;
   schedule(s, shipT, 'SHIP', { order: o.id, qty: o.qty });
@@ -1046,8 +1060,8 @@ export function suggestedLimit(s, dealer) {
   return Math.max(dd.limit, Math.round(monthly * days / 30 * 1.2 / 5000) * 5000);
 }
 export function answerQuestion(s, id, choice) {
-  const q = D.QUESTIONS[id];
+  const q = questionById(s, id);
+  if (!q) return false;
   s.answers.push({ id, choice, correct: choice === q.answer, day: dayOf(s.t) });
-  s.qQueue = s.qQueue.filter((x) => x !== id);
   return choice === q.answer;
 }

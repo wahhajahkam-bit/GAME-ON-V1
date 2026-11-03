@@ -24,7 +24,7 @@ export const ZONES = [
   { id: 'dealers', x: 16, y: 462, w: 772, h: 142, label: 'Dealers (what they owe, per the ERP)', step: 'credit', c: 'credit' },
   { id: 'books', x: 798, y: 462, w: 190, h: 142, label: 'This month', step: null, c: 'rev', tab: 'books' },
 ];
-const SPOT = { sales: [300, 126], sm: [262, 210], gm: [366, 210], erp: [494, 126], fm: [494, 300], warehouse: [742, 128],
+const SPOT = { inbox: [172, 150], sales: [300, 126], sm: [262, 210], gm: [366, 210], erp: [494, 126], fm: [494, 300], warehouse: [742, 128],
   truck: [930, 120], billing: [735, 300], cash: [735, 425] };
 const HOME = {
   SE: [[214, 66], [254, 66], [294, 66], [334, 66]], SM: [[268, 206]], GM: [[372, 206]], FM: [[426, 296]],
@@ -67,7 +67,13 @@ export function draw(ctx, s, ui) {
       if (lw + ctx.measureText(z.sub).width + 34 < z.w) text(ctx, z.sub, z.x + z.w - 8, z.y + 20, FB(500, 10.5), col('muted'), 'right');
     }
   }
-  drawInbox(ctx, s);
+  const now = performance.now();
+  const dt = Math.min(250, now - (anim.lastNow || now)); anim.lastNow = now;
+  const jumped = anim.lastT == null || Math.abs(t - anim.lastT) > 300 || anim.game !== s;
+  anim.lastT = t; anim.game = s;
+  spawnEffects(s, jumped, now);
+  computeStaff(s);
+  drawInbox(ctx, s, now);
   drawErp(ctx, s);
   drawWarehouse(ctx, s, ui);
   drawMd(ctx, s);
@@ -80,9 +86,10 @@ export function draw(ctx, s, ui) {
   drawRoles(ctx, s);
   drawDealers(ctx, s);
   drawBooks(ctx, s);
-  drawOrders(ctx, s, ui);
   drawTruck(ctx, s);
+  drawOrders(ctx, s, ui, dt, jumped, now);
   drawStaff(ctx, s, ui);
+  drawEffects(ctx, now);
   // dusk shading near end of day
   const m = minOf(t);
   if (m > 1020) { ctx.fillStyle = `rgba(10,14,40,${Math.min(0.18, (m - 1020) / 60 * 0.18)})`; ctx.fillRect(0, 0, W, H); }
@@ -93,7 +100,7 @@ function mix(hex, a) {
   const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-function drawInbox(ctx, s) {
+function drawInbox(ctx, s, now) {
   // phone
   rr(ctx, 30, 30 + 14, 132, 176, 14); ctx.fillStyle = col('soft'); ctx.fill();
   const msgs = s.inbox.slice(-4).reverse();
@@ -103,8 +110,13 @@ function drawInbox(ctx, s) {
     const lines = wrap(ctx, m.text, 112, FB(500, 10.5));
     const h = lines.length * 12.5 + 8;
     if (y + h > 172) break;
+    const born = anim.msgSeen.get(m.t + m.order) || 0;
+    const pop = reduceMotion() ? 1 : Math.min(1, (now - born) / 350);
+    ctx.save();
+    if (pop < 1) { ctx.translate(96, y + h / 2); const sc = 0.6 + 0.4 * easeOut(pop); ctx.scale(sc, sc); ctx.globalAlpha = pop; ctx.translate(-96, -(y + h / 2)); }
     rr(ctx, 36, y, 120, h, 7); ctx.fillStyle = age < 180 ? mix(col('good'), 0.25) : col('zone'); ctx.fill();
     lines.forEach((l, i) => text(ctx, l, 41, y + 13 + i * 12.5, FB(500, 10.5), col('ink')));
+    ctx.restore();
     y += h + 4;
   }
   if (!msgs.length) text(ctx, 'No messages yet', 96, 120, FB(500, 11), col('muted'), 'center');
@@ -278,33 +290,58 @@ function drawBooks(ctx, s) {
   text(ctx, '(as of last night)', 808, 596, FB(500, 9.5), col('muted'));
 }
 
-function orderPos(s, o) {
-  const z = { inbox: 'inbox', pricing: 'sales', credit: 'erp', held: 'hold', warehouse: 'wh', transit: null }[o.stage];
+function orderZone(o) {
   if (o.stage === 'pricing' && o.approver === 'SM') return 'sm';
   if (o.stage === 'pricing' && o.approver === 'GMFM') return 'gm';
-  return z;
+  return { inbox: 'inbox', pricing: 'sales', credit: 'erp', held: 'hold', warehouse: 'wh' }[o.stage] || null;
 }
-function drawOrders(ctx, s, ui) {
+const AREA = { inbox: [40, 150, 2, 1], sales: [198, 90, 3, 2], sm: [196, 180, 1, 2], gm: [300, 180, 1, 2], erp: [414, 110, 3, 1], hold: [412, 172, 3, 2], wh: [612, 172, 5, 1] };
+function handler(o) {
+  if (o.stage === 'inbox' || o.stage === 'pricing' || o.stage === 'credit') return o.se != null ? 'SE' + (o.se + 1) : '';
+  if (o.stage === 'held') return 'FM';
+  if (o.stage === 'warehouse') return o.wh != null ? 'WH' + (o.wh + 1) : '';
+  return '';
+}
+function drawOrders(ctx, s, ui, dt, jumped, now) {
   const groups = {};
+  const live = new Set();
   for (const o of s.orders) {
-    const z = orderPos(s, o);
+    const z = orderZone(o);
     if (!z) continue;
     (groups[z] = groups[z] || []).push(o);
   }
-  const area = { inbox: [36, 176, 3, 1], sales: [200, 92, 5, 2], sm: [198, 178, 1, 2], gm: [302, 178, 1, 2], erp: [416, 108, 4, 1], hold: [414, 172, 4, 2], wh: [612, 172, 7, 1] };
+  const k = reduceMotion() || jumped ? 1 : 1 - Math.exp(-dt / 160);
+  const kc = reduceMotion() || jumped ? 1 : 1 - Math.exp(-dt / 50);
   for (const [z, list] of Object.entries(groups)) {
-    const [x0, y0, cols, rows] = area[z];
-    list.slice(-cols * rows).forEach((o, i) => {
-      const x = x0 + (i % cols) * 40, y = y0 + Math.floor(i / cols) * 22;
+    const [x0, y0, cols, rows] = AREA[z];
+    const shown = list.slice(-cols * rows);
+    shown.forEach((o, i) => {
+      let tx = x0 + (i % cols) * 50, ty = y0 + Math.floor(i / cols) * 22;
+      let carried = false;
+      // the Sales Executive walks to the phone and carries the order back to the desk
+      if (o.stage === 'inbox' && o.se != null) {
+        const sp = anim.staff['SE' + o.se];
+        if (sp && sp.job && sp.job.lab === 'Enter ' + o.id) { tx = sp.x + 10; ty = sp.y - 24; carried = true; }
+      }
+      let v = anim.vis.get(o.id);
+      if (!v) { v = { x: z === 'inbox' ? 60 : tx, y: z === 'inbox' ? 120 : ty }; anim.vis.set(o.id, v); }
+      const kk = carried ? kc : k;
+      v.x += (tx - v.x) * kk; v.y += (ty - v.y) * kk;
+      live.add(o.id);
       const bad = o.flags.creditBreach || o.flags.discountBreach || o.flags.intakeError;
       const c = bad ? col('bad') : o.stage === 'held' || o.waitStock ? col('warn') : col('good');
-      rr(ctx, x, y, 36, 17, 4); ctx.fillStyle = col('zone'); ctx.fill(); ctx.lineWidth = ui.hoverOrder === o.id ? 2.5 : 1.5; ctx.strokeStyle = c; ctx.stroke();
-      ctx.fillStyle = D.DEALERS[o.dealer].color; ctx.fillRect(x + 2, y + 3, 3, 11);
-      text(ctx, o.id.slice(2), x + 21, y + 12.5, FM(9.5), col('ink'), 'center');
-      hits.push({ kind: 'order', id: o.id, x, y, w: 36, h: 17 });
+      const x = v.x, y = v.y;
+      rr(ctx, x, y, 46, 18, 4); ctx.fillStyle = col('zone'); ctx.fill(); ctx.lineWidth = ui.hoverOrder === o.id ? 2.5 : 1.5; ctx.strokeStyle = c; ctx.stroke();
+      ctx.fillStyle = D.DEALERS[o.dealer].color; ctx.fillRect(x + 2, y + 3, 3, 12);
+      text(ctx, o.id.slice(2), x + 8, y + 13, FM(9.5), col('ink'));
+      const h = handler(o);
+      if (h) text(ctx, h, x + 43, y + 12.5, FB(800, 8), h === 'FM' ? col('ctrl') : col('price'), 'right');
+      o.__vx = x; o.__vy = y;
+      hits.push({ kind: 'order', id: o.id, x, y, w: 46, h: 18 });
     });
-    if (list.length > cols * rows) text(ctx, `+${list.length - cols * rows}`, x0 + cols * 40 - 4, y0 - 2, FB(700, 10), col('muted'), 'right');
+    if (list.length > cols * rows) text(ctx, `+${list.length - cols * rows} more`, x0 + cols * 50 - 6, y0 - 3, FB(700, 10), col('muted'), 'right');
   }
+  for (const id of anim.vis.keys()) if (!live.has(id)) anim.vis.delete(id);
 }
 
 function drawTruck(ctx, s) {
@@ -329,6 +366,11 @@ function truckShape(ctx, x, y, label, dir) {
   ctx.restore();
 }
 
+// ---------- staff ----------
+export function staffName(role, i) {
+  const short = role === 'CAO' ? 'CA' : role;
+  return ['SE', 'BC', 'CAO', 'CR', 'WH', 'DR'].includes(role) ? short + (i + 1) : short;
+}
 function staffPos(s, role, i) {
   const home = (HOME[role] || [[500, 300]])[i] || HOME[role][0];
   const walk = 15;
@@ -345,30 +387,103 @@ function staffPos(s, role, i) {
   let f;
   if (t < best.s) f = 1 - (best.s - t) / walk; else if (t > best.e) f = 1 - (t - best.e) / walk; else f = 1;
   f = Math.max(0, Math.min(1, f));
+  // when the job is order entry, walk back to the desk while carrying (second half of the job)
+  if (best.st === 'inbox' && t >= best.s && t <= best.e) {
+    const g = Math.min(1, (t - best.s) / Math.max(1, (best.e - best.s) * 0.5));
+    return { x: sx + (home[0] - sx) * g, y: sy + (home[1] - sy) * g, job: best };
+  }
+  if (best.st === 'inbox' && t > best.e) return { x: home[0], y: home[1], job: null };
   return { x: home[0] + (sx - home[0]) * f, y: home[1] + (sy - home[1]) * f, job: t >= best.s && t <= best.e ? best : null };
+}
+function computeStaff(s) {
+  anim.staff = {};
+  for (const role of D.ROLE_IDS) for (let i = 0; i < headcount(s, role); i++) anim.staff[role + i] = staffPos(s, role, i);
 }
 export const staffHits = [];
 function drawStaff(ctx, s, ui) {
   staffHits.length = 0;
   for (const role of D.ROLE_IDS) {
     const n = headcount(s, role);
-    const short = role === 'CAO' ? 'CA' : role;
     for (let i = 0; i < n; i++) {
-      const p = staffPos(s, role, i);
+      const p = anim.staff[role + i] || staffPos(s, role, i);
       const busy = !!p.job;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, 7);
+      const name = staffName(role, i);
+      ctx.beginPath(); ctx.arc(p.x, p.y, 12, 0, 7);
       ctx.fillStyle = D.ROLES[role].color; ctx.fill();
       ctx.lineWidth = 2.5; ctx.strokeStyle = busy ? col('warn') : col('zone'); ctx.stroke();
-      text(ctx, short, p.x, p.y + 3.5, FB(800, 8.5), '#fff', 'center');
-      staffHits.push({ role, i, x: p.x - 11, y: p.y - 11, w: 22, h: 22, job: p.job });
+      text(ctx, name, p.x, p.y + 3.2, FB(800, name.length > 2 ? 8 : 9), '#fff', 'center');
+      staffHits.push({ role, i, name, x: p.x - 13, y: p.y - 13, w: 26, h: 26, job: p.job });
       if (ui.hoverStaff && ui.hoverStaff.role === role && ui.hoverStaff.i === i) {
-        const label = `${D.ROLES[role].name}${p.job ? ': ' + p.job.lab : ': free'}`;
+        const label = `${name} · ${D.ROLES[role].name}${p.job ? ': ' + p.job.lab : ': free'}`;
         ctx.font = FB(600, 11); const w = ctx.measureText(label).width + 12;
         const bx = Math.min(W - w - 4, Math.max(4, p.x - w / 2));
-        rr(ctx, bx, p.y - 34, w, 20, 5); ctx.fillStyle = col('ink'); ctx.fill();
-        text(ctx, label, bx + 6, p.y - 20, FB(600, 11), col('bg'));
+        rr(ctx, bx, p.y - 38, w, 20, 5); ctx.fillStyle = col('ink'); ctx.fill();
+        text(ctx, label, bx + 6, p.y - 24, FB(600, 11), col('bg'));
       }
     }
+  }
+}
+
+// ---------- small real-time effects ----------
+const anim = { vis: new Map(), staff: {}, fx: [], msgSeen: new Map(), seen: null, lastNow: 0, lastT: null, game: null };
+const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+let rm = null;
+function reduceMotion() { if (rm == null) { rm = matchMedia('(prefers-reduced-motion: reduce)'); } return rm.matches; }
+function dealerSpot(id) { const i = D.DEALER_IDS.indexOf(id); return i < 0 ? [96, 300] : [26 + i * 190 + 90, 540]; }
+function spawnEffects(s, jumped, now) {
+  const cur = { rec: s.receipts.length, inv: s.invoices.length, dn: s.deliveries.length, inbox: s.inbox.length };
+  if (!anim.seen || jumped) {
+    anim.seen = { ...cur, breach: new Set(s.orders.filter((o) => o.flags.creditBreach || o.flags.discountBreach).map((o) => o.id)) };
+    for (const m of s.inbox) anim.msgSeen.set(m.t + m.order, 0);
+    return;
+  }
+  const off = reduceMotion();
+  for (const m of s.inbox) if (!anim.msgSeen.has(m.t + m.order)) anim.msgSeen.set(m.t + m.order, now);
+  if (!off) {
+    for (const r of s.receipts.slice(anim.seen.rec)) {
+      const [x, y] = dealerSpot(r.dealer);
+      for (let k = 0; k < 3; k++) anim.fx.push({ kind: 'coin', x0: x, y0: y, x1: 890 + k * 8, y1: 318, t0: now + k * 140, dur: 1000, label: k === 0 ? '+' + Math.round(r.amount / 1000) + 'k' : '' });
+    }
+    for (const inv of s.invoices.slice(anim.seen.inv)) {
+      if (inv.opening) continue;
+      const [x, y] = inv.project ? [96, 300] : dealerSpot(inv.dealer);
+      anim.fx.push({ kind: 'sheet', x0: 690, y0: 296, x1: x, y1: y, t0: now, dur: 1100, label: inv.id.replace('INV-', '') });
+    }
+    for (const dn of s.deliveries.slice(anim.seen.dn)) anim.fx.push({ kind: 'box', x0: 742, y0: 120, x1: 930, y1: 190, t0: now, dur: 800, label: '' });
+    for (const o of s.orders) {
+      if ((o.flags.creditBreach || o.flags.discountBreach) && !anim.seen.breach.has(o.id)) {
+        anim.seen.breach.add(o.id);
+        anim.fx.push({ kind: 'ring', order: o, t0: now, dur: 1400 }, { kind: 'ring', order: o, t0: now + 450, dur: 1400 });
+      }
+    }
+  }
+  Object.assign(anim.seen, cur);
+  if (anim.fx.length > 60) anim.fx.splice(0, anim.fx.length - 60);
+}
+function drawEffects(ctx, now) {
+  anim.fx = anim.fx.filter((f) => now < f.t0 + f.dur);
+  for (const f of anim.fx) {
+    const p = (now - f.t0) / f.dur;
+    if (p < 0) continue;
+    const e = easeOut(p);
+    if (f.kind === 'ring') {
+      const x = (f.order.__vx ?? 500) + 23, y = (f.order.__vy ?? 300) + 9;
+      ctx.beginPath(); ctx.arc(x, y, 12 + 30 * e, 0, 7); ctx.lineWidth = 3; ctx.strokeStyle = col('bad'); ctx.globalAlpha = 1 - p; ctx.stroke(); ctx.globalAlpha = 1;
+      continue;
+    }
+    const x = f.x0 + (f.x1 - f.x0) * e, y = f.y0 + (f.y1 - f.y0) * e - Math.sin(p * Math.PI) * 50;
+    ctx.globalAlpha = p > 0.85 ? (1 - p) / 0.15 : 1;
+    if (f.kind === 'coin') {
+      ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fillStyle = '#F2B705'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#A07700'; ctx.stroke();
+      if (f.label) text(ctx, f.label, x + 10, y - 8, FB(800, 11), col('cash'));
+    } else if (f.kind === 'sheet') {
+      rr(ctx, x - 9, y - 11, 18, 22, 2); ctx.fillStyle = '#FFFFFF'; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = col('bill'); ctx.stroke();
+      ctx.fillStyle = col('bill'); for (let k = 0; k < 3; k++) ctx.fillRect(x - 5, y - 6 + k * 5, 10, 1.6);
+      if (f.label) text(ctx, f.label, x + 12, y - 8, FB(800, 10), col('bill'));
+    } else if (f.kind === 'box') {
+      rr(ctx, x - 8, y - 7, 16, 14, 2); ctx.fillStyle = '#C8A26B'; ctx.fill(); ctx.strokeStyle = '#8A6A3A'; ctx.lineWidth = 1.2; ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
   }
 }
 

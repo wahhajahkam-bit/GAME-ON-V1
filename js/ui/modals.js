@@ -3,6 +3,7 @@ import * as D from '../data.js';
 import { dayOf, fmtDay, fmtT, monthName } from '../sim/time.js';
 import { dealerBalance, dealerOverdue, findOption, findControl } from '../sim/sim.js';
 import { finalScore } from '../sim/report.js';
+import { questionById } from '../sim/weekly.js';
 import { n0, fmtK } from './panels.js';
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -19,30 +20,56 @@ export function startModal(hasSave) {
     <button data-act="start" data-mode="sandbox"><b>Sandbox</b>No winning or losing. Run as many months as you like and experiment freely.</button>
     ${hasSave ? '<button data-act="load"><b>Continue</b>Load your saved game.</button>' : ''}
   </div>
-  <label class="row"><input type="checkbox" id="optQ" checked> Pop-up finance questions ("when is money counted?")</label>
+  <label class="row"><input type="checkbox" id="optQ" checked> Weekly review: about 5 questions at the end of each week ("when is money counted?")</label>
   <h3 style="margin-top:12px">How to play</h3>
   <ul class="hint" style="margin:6px 0 0;padding-left:18px">
     <li><b>Speed:</b> ❚❚ pause · 1× (a day takes 5 minutes) · 2.5× (2 minutes) · 5× (1 minute) · +1 day · Skip month. Keys: Space, 1, 2, 3.</li>
-    <li><b>Map:</b> tap any area to open its step, an order box to follow its money, a person to see their task, a dealer card for its account.</li>
+    <li><b>Map:</b> tap any area to open its step, an order box to follow its money, a person (SE1, SE2…) to see their task, a dealer card for its account.</li>
+    <li><b>Panel:</b> Map only / Half / Full buttons at the top; drag the panel's edge to make it wider or narrower.</li>
+    <li><b>Weekly review:</b> no interruptions during the day. At the end of each week you get a short summary and about 5 questions.</li>
     <li><b>Steps tab:</b> each step shows today, the policy, what is happening now, and the options you can switch to.</li>
     <li><b>Books tab:</b> what the ERP says next to the truth. <b>Reports:</b> a full month-end report on the 3rd of each month.</li>
     <li>Figures marked as assumptions (opening stock, cash, salaries, unit costs, the hotel project) are not in the case; everything in March comes from Exhibits A–H.</li>
   </ul>`;
 }
 
-export function questionModal(id, answered) {
-  const q = D.QUESTIONS[id];
+function questionBody(s, id, answered) {
+  const q = questionById(s, id);
+  if (!q) return '<p>Question not found.</p>';
   const concept = D.CONCEPTS.find((c) => c.id === q.concept);
-  let h = `<span class="tag" style="--c:var(--rev)">When is money counted?</span><h2 style="margin-top:8px">${q.title}</h2><p style="font-size:15px">${q.q}</p>`;
+  let h = `<h2 style="margin-top:8px">${q.title}</h2><p style="font-size:15px">${q.q}</p>`;
   q.options.forEach((o, i) => {
     const cls = answered != null ? (i === q.answer ? 'right' : i === answered ? 'wrong' : '') : '';
-    h += `<button class="qopt ${cls}" data-act="answer" data-q="${id}" data-i="${i}" ${answered != null ? 'disabled' : ''}>${String.fromCharCode(65 + i)}. ${esc(o)}</button>`;
+    h += `<button class="qopt ${cls}" data-act="answer" data-q="${id}" data-i="${i}" ${answered != null ? 'disabled' : ''}>${String.fromCharCode(65 + i)}. ${o}</button>`;
   });
   if (answered != null) {
     h += `<div class="explain"><b>${answered === q.answer ? 'Right.' : 'Not quite.'}</b> ${q.explain}</div>`;
     if (concept) h += `<div class="cc" style="--c:var(--${concept.c});margin-top:10px"><h3>${concept.t}</h3><div>${concept.d}</div><div class="f">${concept.f}</div></div>`;
-    h += `<div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn" data-act="close">Continue</button></div>`;
   }
+  return h;
+}
+
+// Re-reading a question from the Learn tab
+export function questionModal(s, id, answered) {
+  return `${close}<span class="tag" style="--c:var(--rev)">When is money counted?</span>${questionBody(s, id, answered)}`;
+}
+
+// The end-of-week review: summary + up to 5 questions, one at a time
+export function weeklyModal(s, wr, id, answered) {
+  const sm = wr.summary;
+  const last = wr.idx === wr.ids.length - 1;
+  const bar = wr.ids.map((_, i) => `<i class="${i < wr.idx || (i === wr.idx && answered != null) ? 'done' : i === wr.idx ? 'now' : ''}"></i>`).join('');
+  let h = `<span class="tag" style="--c:var(--rev)">Weekly review · ${wr.label}</span>
+  <div class="progress" aria-label="Question ${wr.idx + 1} of ${wr.ids.length}">${bar}</div>
+  <div class="hint">Question ${wr.idx + 1} of ${wr.ids.length}</div>`;
+  if (wr.idx === 0 && answered == null) h += `<div class="wsum">
+    <div>Orders<b>${sm.orders}</b>${n0(sm.ordersValue)}</div><div>Delivered (earned)<b>${n0(sm.delivered)}</b>${sm.deliveries} deliveries</div>
+    <div>Invoices dated<b>${n0(sm.invoiced)}</b>&nbsp;</div><div>Cash received<b>${n0(sm.cash)}</b>&nbsp;</div>
+    <div>On credit hold<b>${sm.held}</b>now</div><div>Policy breaches<b class="${sm.breaches ? 'k-bad' : ''}">${sm.breaches}</b>this week</div></div>`;
+  h += questionBody(s, id, answered);
+  h += `<div class="row" style="margin-top:12px;justify-content:space-between">
+    <button class="btn ghost small" data-act="wskip">Skip the rest</button>
+    ${answered != null ? `<button class="btn" data-act="wnext">${last ? 'Back to the game' : 'Next question →'}</button>` : '<span class="hint">Pick an answer</span>'}</div>`;
   return h;
 }
 
@@ -139,7 +166,7 @@ export function finalModal(s) {
 export function menuModal(s, settings) {
   return `${close}<h2>Menu</h2>
   <div class="row" style="margin:10px 0"><button class="btn" data-act="save">Save game</button><button class="btn ghost" data-act="load">Load saved game</button><button class="btn ghost" data-act="new">New game</button></div>
-  <label class="row"><input type="checkbox" data-act="toggleQ" ${s.settings.questions ? 'checked' : ''}> Pop-up finance questions</label>
+  <label class="row"><input type="checkbox" data-act="toggleQ" ${s.settings.questions ? 'checked' : ''}> Weekly review questions (end of each week)</label>
   <label class="row"><input type="checkbox" data-act="toggleSound" ${settings.sound ? 'checked' : ''}> Sound effects</label>
   <div class="row" style="margin:8px 0">Theme: <button class="btn small ghost" data-act="theme" data-theme="">Auto</button><button class="btn small ghost" data-act="theme" data-theme="light">Light</button><button class="btn small ghost" data-act="theme" data-theme="dark">Dark</button></div>
   <h3 style="margin-top:12px">Assumptions (not in the case)</h3>

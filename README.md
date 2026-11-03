@@ -6,13 +6,14 @@ It runs in any web browser with nothing to install. It will be playable at `http
 
 ## How the game works
 
-- **The map**: dealer orders arrive as WhatsApp messages. Staff (dots) walk to their tasks: Sales Executives, Sales Manager, General Manager, Finance Manager, Billing Clerk, warehouse staff and a driver. Orders move as boxes from the sales desk to the ERP credit check, the credit hold, the warehouse and onto the truck. The bank shows cash; the dealer cards show what each dealer owes.
+- **The map** fills the screen. Dealer orders arrive as WhatsApp messages; a named Sales Executive (SE1, SE2) walks to the phone and carries the order to their desk. Staff (SM, GM, FM, BC1, WH1, WH2, DR1…) walk to their tasks. Order boxes glide from the sales desk to the ERP credit check, the credit hold, the warehouse and onto the truck, tagged with who is handling them. Coins fly to the bank on payments, invoices fly to dealers, and a red ring flashes on a policy breach.
+- **Side panel**: Map only / Half / Full, and drag its edge (or − / +) to make it narrower or wider. On a phone it is a bottom sheet.
 - **Time**: pause and inspect anything. Speeds: 1 day = 5 minutes, 2 minutes or 1 minute. Also **+1 day** and **Skip month**.
 - **March is exact**: the 9 orders, deliveries, invoices, receipts and the limit change happen exactly as in Exhibits A–H. If you change nothing, the March report matches the solution workbook. From April, new orders come from the same dealers and products.
 - **11 control panels** (Steps tab): each shows how the step works today, the policy, what is happening now, and options to switch to. Options cost money, take days to set up, may need staff, and have side effects.
 - **Hidden truth**: real shelf stock is unknown until you set up counting. Forgotten invoices are invisible until you run a report.
 - **Books tab**: what the ERP says next to the truth (revenue by delivery, receivables, suspense, stock, the hotel project's advance as a liability).
-- **Finance questions** pop up at the right moment: an order is a promise, revenue on delivery, cash when it reaches the bank, a promise to pay is not enough, an advance is a liability. A big hotel contract (a scaled version of "100M project, 60M materials, 20M advance") runs from April to June.
+- **Weekly review**: no interruptions during the day. At the end of each week you get a short summary and about 5 questions, built from that week's real numbers plus the key money moments: an order is a promise, revenue on delivery, cash when it reaches the bank, a promise to pay is not enough, an advance is a liability. A big hotel contract (a scaled version of "100M project, 60M materials, 20M advance") runs from April to June.
 - **Month-end report** on the 3rd of each month: KPIs (from sheet 8 of the workbook), what went wrong, booked vs earned revenue, the exception map, true profit, dealer balances and the changes you made.
 
 **Campaign** (March to June): your score combines the KPI score, true profit and cash. You lose if the auditors reject the books twice (revenue errors above 10%; March is only a warning) or if cash runs out. **Sandbox**: no winning or losing.
@@ -27,6 +28,7 @@ Figures not in the case (opening stock, unit costs, cash, salaries, the hotel pr
 | `js/data.js` | Case data (Exhibits A–H), the 11 steps and their options, KPIs, questions, concept cards |
 | `js/sim/sim.js` | The business engine: every action is an event at a game time |
 | `js/sim/report.js` | Month-end report, KPIs and score |
+| `js/sim/weekly.js` | Weekly review: summary and questions from the week's numbers |
 | `js/render/map.js` | The animated map (Canvas) |
 | `js/ui/panels.js`, `js/ui/modals.js` | Side tabs and pop-up windows |
 | `js/main.js` | Game loop, speeds, input, saving |

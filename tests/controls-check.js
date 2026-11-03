@@ -2,6 +2,7 @@
 // Run: node tests/controls-check.js
 import { createGame, skipToNextClose, setControl, hire, advanceTo, setApprovedLimit } from '../js/sim/sim.js';
 import { finalScore } from '../js/sim/report.js';
+import { questionById } from '../js/sim/weekly.js';
 
 let fails = 0;
 const ok = (name, cond, info = '') => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${name} ${info}`); if (!cond) fails++; };
@@ -48,6 +49,31 @@ const ok = (name, cond, info = '') => { console.log(`${cond ? 'PASS' : 'FAIL'}  
   skipToNextClose(s);
   const k = Object.fromEntries(s.reports[0].kpis.map((x) => [x.id, x.val]));
   ok('FM-approved limit not counted as unauthorised', k.mdChanges === 1, k.mdChanges);
+}
+
+// 2c. Weekly review: nothing mid-day, up to 5 questions at the end of each 7th day
+{
+  const s = createGame({ seed: 11 });
+  advanceTo(s, 3 * 1440 + 13 * 60);
+  ok('no questions mid-week', s.weekReview == null);
+  advanceTo(s, 7 * 1440 + 480);
+  const wr = s.weekReview;
+  ok('weekly review after day 7', !!wr && wr.end === 6, wr && wr.label);
+  ok('1 to 5 questions', wr && wr.ids.length >= 1 && wr.ids.length <= 5, wr && wr.ids.join(','));
+  let valid = true;
+  for (const id of wr ? wr.ids : []) {
+    const q = questionById(s, id);
+    if (!q || q.answer < 0 || q.answer >= q.options.length || new Set(q.options).size !== q.options.length) { valid = false; console.log('  bad question', id, q); }
+  }
+  ok('every question has distinct options and one valid answer', valid);
+  ok('SE named on orders', s.orders.filter((o) => o.se != null).length === s.orders.length, s.orders.map((o) => o.id + ':SE' + (o.se + 1)).join(' '));
+  skipToNextClose(s);
+  ok('skip month keeps one review only', s.weekReview && s.weekReview.ids.length <= 5, s.weekReview && s.weekReview.label);
+  // all weekly questions across a campaign are valid
+  const c = createGame({ seed: 4 });
+  let bad = 0, total = 0;
+  while (!c.over) { skipToNextClose(c); for (const [id, q] of Object.entries(c.dynQ)) { total++; if (q.answer < 0 || new Set(q.options).size !== q.options.length) bad++; } }
+  ok('all generated weekly questions valid', bad === 0, `${total} checked`);
 }
 
 // 3. Full campaigns: as-is and "consultant" play, several seeds

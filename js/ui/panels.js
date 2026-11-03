@@ -3,6 +3,8 @@ import * as D from '../data.js';
 import { dayOf, monthOf, monthFirst, fmtDay, fmtT, monthName } from '../sim/time.js';
 import { dealerBalance, dealerOverdue, oldestOverdueDays, snapshot, findOption, canChoose, headcount, suggestedLimit } from '../sim/sim.js';
 import { computeMonthReport, stars } from '../sim/report.js';
+import { questionById } from '../sim/weekly.js';
+import { staffName } from '../render/map.js';
 
 export const n0 = (x) => (x == null ? '–' : Math.round(x).toLocaleString('en-US'));
 const pct = (x) => (x == null ? '–' : Math.round(x * 100) + '%');
@@ -299,9 +301,17 @@ export function staffTab(s) {
       <td><div class="row"><button class="btn small" data-act="hire" data-role="${r}">Hire</button>${n > 0 ? `<button class="btn small ghost" data-act="letgo" data-role="${r}">Let go</button>` : ''}</div></td></tr>`;
   }).join('');
   const pay = D.ROLE_IDS.reduce((a, r) => a + headcount(s, r) * D.ROLES[r].salary, 0);
+  const today = s.jobs.filter((j) => dayOf(j.s) === d).sort((a, b) => a.s - b.s);
+  const people = [];
+  for (const r of D.ROLE_IDS) for (let i = 0; i < headcount(s, r); i++) {
+    const mine = today.filter((j) => j.r === r && j.i === i);
+    const nowJob = mine.find((j) => s.t >= j.s && s.t <= j.e);
+    people.push(`<tr><td><b>${staffName(r, i)}</b></td><td>${D.ROLES[r].name}</td><td>${nowJob ? `<span class="pill warn">${esc(nowJob.lab)}</span>` : '<span class="pill mute">free</span>'}</td><td class="hint">${mine.map((j) => `${fmtT(j.s).split(' ')[1]} ${esc(j.lab)}`).join(' · ') || '–'}</td></tr>`);
+  }
   return `<div class="ph"><h2>Staff</h2><span class="hint">Payroll ${n0(pay)} / month</span></div>
   <p class="lead">Every task takes time. When a role is full for the day, work waits until tomorrow: watch the workload bars. Hiring costs 2,000 and takes ${D.HIRE_LEAD_DAYS} days.</p>
   <div class="card"><div class="scroll"><table><tr><th>Role</th><th class="r">People</th><th class="r">Salary</th><th>Today's load</th><th></th></tr>${rows}</table></div></div>
+  <div class="card"><h3>People and today's work</h3><div class="scroll"><table><tr><th>Name</th><th>Role</th><th>Now</th><th>Today</th></tr>${people.join('')}</table></div></div>
   <div class="card"><h3>Who does what</h3><table>
     <tr><td>Enter orders, set price</td><td>Sales Executive</td></tr>
     <tr><td>Release on credit warning</td><td>${s.controls.credit === 'warning' ? '<span class="k-bad">Sales Executive</span>' : 'Finance Manager only'}</td></tr>
@@ -322,10 +332,10 @@ export function reportsTab(s, final) {
 
 // ---------- Learn ----------
 export function learnTab(s) {
-  const ans = s.answers.map((a) => { const q = D.QUESTIONS[a.id]; return `<tr data-q="${a.id}" style="cursor:pointer"><td>${fmtDay(a.day)}</td><td>${q.title}</td><td>${a.correct ? '<span class="pill good">Right</span>' : '<span class="pill bad">Missed</span>'}</td></tr>`; }).join('');
-  const left = Object.keys(D.QUESTIONS).length - s.answers.length;
-  return `<div class="ph"><h2>Finance desk</h2><span class="hint">${s.answers.filter((a) => a.correct).length} right of ${s.answers.length} · ${left} still to come</span></div>
-  <p class="lead">Questions appear when the moment happens in the business. Tap one to read the answer again.</p>
-  <div class="card"><h3>Your questions</h3>${ans ? `<table><tr><th>When</th><th>Question</th><th>Result</th></tr>${ans}</table>` : '<span class="hint">None yet. The first one comes with the first order.</span>'}</div>
+  const ans = s.answers.slice().reverse().map((a) => { const q = questionById(s, a.id); if (!q) return ''; return `<tr data-q="${a.id}" style="cursor:pointer"><td>${fmtDay(a.day)}</td><td>${q.title}</td><td>${a.correct ? '<span class="pill good">Right</span>' : '<span class="pill bad">Missed</span>'}</td></tr>`; }).join('');
+  const left = Object.keys(D.QUESTIONS).filter((id) => !s.asked[id]).length;
+  return `<div class="ph"><h2>Finance desk</h2><span class="hint">${s.answers.filter((a) => a.correct).length} right of ${s.answers.length}</span></div>
+  <p class="lead">At the end of each week you get a short review: about 5 questions about what really happened that week. Tap one to read the answer again. Key moments still to come: ${left}.</p>
+  <div class="card"><h3>Your questions</h3>${ans ? `<table><tr><th>When</th><th>Question</th><th>Result</th></tr>${ans}</table>` : '<span class="hint">None yet. The first weekly review comes on 7 March.</span>'}</div>
   <div class="cards">${D.CONCEPTS.map((c) => `<div class="cc" style="--c:var(--${c.c})"><h3>${c.t}</h3><div>${c.d}</div><div class="f">${c.f}</div><div class="hint"><b>Here:</b> ${c.ex}</div></div>`).join('')}</div>`;
 }
