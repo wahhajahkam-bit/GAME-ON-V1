@@ -87,6 +87,7 @@ function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) 
 function newGame(mode, questions) {
   s = createGame({ mode, seed: (Date.now() % 1000000) | 0, questions });
   speed = 0; ui.tab = 'steps'; ui.openStep = null; lastLogLen = 0;
+  dock.key = null; dock.mode = 'pill'; $('#qdock').innerHTML = '';
   closeModal(); buildTabs(); render(true);
   toast(mode === 'campaign' ? 'Campaign started. Press 1× to run the business, or open a step first.' : 'Sandbox started.');
 }
@@ -99,7 +100,7 @@ function loadGame() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) { toast('No saved game found.'); return false; }
     s = JSON.parse(raw); speed = 0; lastLogLen = s.log.length;
-    s.qPending = s.qPending || s.qQueue || []; delete s.qQueue; s.dynQ = s.dynQ || {}; s.weekReview = s.weekReview || null; closeModal(); buildTabs(); render(true); toast('Game loaded.');
+    s.qPending = s.qPending || s.qQueue || []; delete s.qQueue; s.dynQ = s.dynQ || {}; s.weekReview = s.weekReview || null; dock.key = null; $('#qdock').innerHTML = ''; closeModal(); buildTabs(); render(true); toast('Game loaded.');
     return true;
   } catch (e) { toast('Could not load the saved game.'); return false; }
 }
@@ -134,7 +135,7 @@ function afterAdvance() {
     if (!s.over) { setSpeed(0); openModal(M.reportModal(s, m), 'report'); return; }
   }
   if (s.over) { setSpeed(0); saveGame(true); openModal(M.finalModal(s), 'final'); return; }
-  if (s.weekReview && s.settings.questions) { setSpeed(0); openWeekly(); }
+  updateDock();
 }
 
 // ---------- rendering ----------
@@ -205,15 +206,32 @@ function openStep(stepId) {
 function openModal(html, kind) { ui.modal = kind || 'modal'; $('#modal').innerHTML = html; $('#modalBack').hidden = false; $('#modal').scrollTop = 0; }
 function closeModal() {
   const was = ui.modal; ui.modal = null; $('#modalBack').hidden = true; $('#modal').innerHTML = '';
-  if (s && !s.over && !['start', 'question', 'question-answered'].includes(was) && s.weekReview && s.settings.questions) openWeekly();
+
 }
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, 3200); }
 
 function setSpeed(v) { speed = v; render(false); }
-function openWeekly() {
-  const wr = s.weekReview;
-  if (!wr || wr.idx >= wr.ids.length) { s.weekReview = null; return; }
-  openModal(M.weeklyModal(s, wr, wr.ids[wr.idx], null), 'question');
+// ---------- weekly questions: a notification dock that never pauses the game ----------
+const dock = { mode: 'pill', key: null, answered: null, timer: null };
+function updateDock(force) {
+  const el = $('#qdock');
+  const wr = s && s.settings.questions ? s.weekReview : null;
+  if (!wr || wr.idx >= wr.ids.length) { if (s && wr) s.weekReview = null; if (el.innerHTML) el.innerHTML = ''; dock.key = null; return; }
+  const key = wr.end + ':' + wr.ids.length;
+  if (key !== dock.key) {
+    // a new week's questions arrived: show a small toast, then fold it into a pill
+    const first = dock.key == null && !force;
+    dock.key = key; dock.answered = null; wr.isNew = true;
+    if (dock.mode !== 'open' || first) dock.mode = 'toast';
+    clearTimeout(dock.timer);
+    dock.timer = setTimeout(() => { if (dock.mode === 'toast') { dock.mode = 'pill'; drawDock(); } }, 9000);
+  }
+  if (force) drawDock();
+  else if (!el.innerHTML) drawDock();
+}
+function drawDock() {
+  const wr = s.weekReview; if (!wr) { $('#qdock').innerHTML = ''; return; }
+  $('#qdock').innerHTML = M.dockHtml(s, wr, dock.mode, dock.answered);
 }
 
 // ---------- input ----------
@@ -236,21 +254,24 @@ document.addEventListener('click', (e) => {
     case 'new': openModal(M.startModal(hasSave()), 'start'); break;
     case 'answer': {
       const id = el.dataset.q, i = +el.dataset.i;
+      if (el.closest('#qdock')) { if (dock.answered != null) break; answerQuestion(s, id, i); dock.answered = i; drawDock(); break; }
       answerQuestion(s, id, i);
-      if (ui.modal === 'question' && s.weekReview) { ui.modal = 'question-answered'; $('#modal').innerHTML = M.weeklyModal(s, s.weekReview, id, i); }
-      else $('#modal').innerHTML = M.questionModal(s, id, i);
+      $('#modal').innerHTML = M.questionModal(s, id, i);
       break;
     }
+    case 'dockOpen': if (s.weekReview) s.weekReview.isNew = false; dock.mode = 'open'; drawDock(); break;
+    case 'dockHide': if (s.weekReview) s.weekReview.isNew = false; dock.mode = 'pill'; drawDock(); break;
     case 'wnext': {
-      const wr = s.weekReview; if (!wr) { closeModal(); break; }
-      wr.idx++;
-      if (wr.idx < wr.ids.length) openWeekly(); else { s.weekReview = null; closeModal(); toast('Weekly review done. Press play to continue.'); }
+      const wr = s.weekReview; if (!wr) break;
+      wr.idx++; dock.answered = null;
+      if (wr.idx >= wr.ids.length) { s.weekReview = null; dock.key = null; $('#qdock').innerHTML = ''; toast('All caught up. New questions come at the end of next week.'); }
+      else drawDock();
       break;
     }
     case 'wskip': {
       const wr = s.weekReview;
       if (wr) for (const id of wr.ids.slice(wr.idx).reverse()) if (D.QUESTIONS[id] && !s.qPending.includes(id)) s.qPending.unshift(id);
-      s.weekReview = null; closeModal(); toast('Skipped. Unseen concept questions will come next week.');
+      s.weekReview = null; dock.key = null; $('#qdock').innerHTML = ''; toast('Skipped. Key concept questions will come back next week.');
       break;
     }
     case 'choose': {
@@ -275,7 +296,7 @@ document.addEventListener('click', (e) => {
     case 'sandbox': s.mode = 'sandbox'; s.over = null; closeModal(); toast('Sandbox: the business keeps running.'); render(true); break;
     case 'tab': closeModal(); setTab(el.dataset.tab); break;
     case 'theme': settings.theme = el.dataset.theme; saveSettings(); applyTheme(); toast('Theme changed.'); break;
-    case 'toggleQ': s.settings.questions = el.checked; if (!el.checked) s.weekReview = null; break;
+    case 'toggleQ': s.settings.questions = el.checked; if (!el.checked) s.weekReview = null; updateDock(true); break;
     case 'toggleSound': settings.sound = el.checked; saveSettings(); break;
   }
 });
@@ -307,7 +328,7 @@ $('#btnMonth').addEventListener('click', () => {
   const qs = s.settings.questions;
   skipToNextClose(s);
   afterAdvance(); render(true);
-  if (qs && s.weekReview) toast('Weekly review for the last week of the month is ready.');
+
 });
 $('#btnFull').addEventListener('click', () => {
   try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (e) { toast('Full screen is not available here.'); }

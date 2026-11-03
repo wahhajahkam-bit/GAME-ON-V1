@@ -20,20 +20,20 @@ export function startModal(hasSave) {
     <button data-act="start" data-mode="sandbox"><b>Sandbox</b>No winning or losing. Run as many months as you like and experiment freely.</button>
     ${hasSave ? '<button data-act="load"><b>Continue</b>Load your saved game.</button>' : ''}
   </div>
-  <label class="row"><input type="checkbox" id="optQ" checked> Weekly review: about 5 questions at the end of each week ("when is money counted?")</label>
+  <label class="row"><input type="checkbox" id="optQ" checked> Weekly questions as a notification on the map (they never pause the game)</label>
   <h3 style="margin-top:12px">How to play</h3>
   <ul class="hint" style="margin:6px 0 0;padding-left:18px">
     <li><b>Speed:</b> ❚❚ pause · 1× (a day takes 5 minutes) · 2.5× (2 minutes) · 5× (1 minute) · +1 day · Skip month. Keys: Space, 1, 2, 3.</li>
     <li><b>Map:</b> tap any area to open its step, an order box to follow its money, a person (SE1, SE2…) to see their task, a dealer card for its account.</li>
     <li><b>Panel:</b> Map only / Half / Full buttons at the top; drag the panel's edge to make it wider or narrower.</li>
-    <li><b>Weekly review:</b> no interruptions during the day. At the end of each week you get a short summary and about 5 questions.</li>
+    <li><b>Weekly questions:</b> nothing stops the game. At the end of each week a small notification appears on the map with about 5 questions. Answer now, or hide it and answer later.</li>
     <li><b>Steps tab:</b> each step shows today, the policy, what is happening now, and the options you can switch to.</li>
     <li><b>Books tab:</b> what the ERP says next to the truth. <b>Reports:</b> a full month-end report on the 3rd of each month.</li>
     <li>Figures marked as assumptions (opening stock, cash, salaries, unit costs, the hotel project) are not in the case; everything in March comes from Exhibits A–H.</li>
   </ul>`;
 }
 
-function questionBody(s, id, answered) {
+function questionBody(s, id, answered, compact) {
   const q = questionById(s, id);
   if (!q) return '<p>Question not found.</p>';
   const concept = D.CONCEPTS.find((c) => c.id === q.concept);
@@ -44,9 +44,30 @@ function questionBody(s, id, answered) {
   });
   if (answered != null) {
     h += `<div class="explain"><b>${answered === q.answer ? 'Right.' : 'Not quite.'}</b> ${q.explain}</div>`;
-    if (concept) h += `<div class="cc" style="--c:var(--${concept.c});margin-top:10px"><h3>${concept.t}</h3><div>${concept.d}</div><div class="f">${concept.f}</div></div>`;
+    if (concept && !compact) h += `<div class="cc" style="--c:var(--${concept.c});margin-top:10px"><h3>${concept.t}</h3><div>${concept.d}</div><div class="f">${concept.f}</div></div>`;
+    else if (concept) h += `<div class="hint" style="margin-top:6px">Concept: <b>${concept.t}</b> · ${concept.f}</div>`;
   }
   return h;
+}
+
+// Notification dock over the map: a pill, a "new questions" toast, or an open question card.
+export function dockHtml(s, wr, mode, answered) {
+  if (!wr) return '';
+  const left = wr.ids.length - wr.idx;
+  if (mode === 'pill') return `<button class="qpill ${wr.isNew ? 'new' : ''}" data-act="dockOpen" title="Open the weekly questions (the game keeps running)">❓ Weekly questions <span class="n">${left}</span></button>`;
+  if (mode === 'toast') {
+    const sm = wr.summary;
+    return `<div class="qcard"><div class="qh"><b>Weekly review · ${wr.label}</b><button class="hideBtn" data-act="dockHide">Later</button></div>
+      <p><b>${wr.fresh || left} new question${(wr.fresh || left) === 1 ? '' : 's'}</b> about last week${left > (wr.fresh || 0) ? ` (${left} waiting in total)` : ''}. The game keeps running while you answer.</p>
+      <div class="wsum"><div>Orders<b>${sm.orders}</b></div><div>Earned<b>${n0(sm.delivered)}</b></div><div>Cash in<b>${n0(sm.cash)}</b></div></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn small ghost" data-act="dockHide">Later</button><button class="btn small" data-act="dockOpen">Answer now</button></div></div>`;
+  }
+  const id = wr.ids[wr.idx];
+  const bar = wr.ids.map((_, i) => `<i class="${i < wr.idx || (i === wr.idx && answered != null) ? 'done' : i === wr.idx ? 'now' : ''}"></i>`).join('');
+  return `<div class="qcard"><div class="qh"><b>Weekly review · ${wr.idx + 1} of ${wr.ids.length}</b><button class="hideBtn" data-act="dockHide" title="Hide; answer later">Hide ▾</button></div>
+    <div class="progress">${bar}</div>${questionBody(s, id, answered, true)}
+    <div class="row" style="margin-top:8px;justify-content:space-between"><button class="btn ghost small" data-act="wskip">Skip all</button>
+    ${answered != null ? `<button class="btn small" data-act="wnext">${wr.idx === wr.ids.length - 1 ? 'Done' : 'Next →'}</button>` : '<span class="hint">Pick an answer</span>'}</div></div>`;
 }
 
 // Re-reading a question from the Learn tab

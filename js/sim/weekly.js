@@ -128,7 +128,7 @@ export function buildWeeklyReview(s, endDay) {
   w.checked = w.orders.filter((o) => o.credit);
   // carry over concept questions not yet shown
   s.qPending = s.qPending || [];
-  if (s.weekReview) for (const id of s.weekReview.ids.slice(s.weekReview.idx)) if (D.QUESTIONS[id] && !s.qPending.includes(id)) s.qPending.unshift(id);
+  const carry = s.weekReview ? s.weekReview.ids.slice(s.weekReview.idx) : [];
   const ids = s.qPending.splice(0, 3);
   s.dynQ = s.dynQ || {};
   for (let k = 0; k < ORDER.length && ids.length < MAX; k++) {
@@ -148,7 +148,10 @@ export function buildWeeklyReview(s, endDay) {
     breaches: w.orders.filter((o) => o.flags.creditBreach || o.flags.discountBreach).length,
     cancelled: w.orders.filter((o) => o.stage === 'cancelled').length,
   };
-  s.weekReview = ids.length ? { start, end: endDay, label: `${fmtDay(start)} to ${fmtDay(endDay)}`, month: monthOf(endDay), ids, idx: 0, summary } : null;
+  // unanswered questions from earlier weeks stay in the queue (at most 10 waiting)
+  let all = carry.concat(ids);
+  if (all.length > 10) all = all.slice(all.length - 10);
+  s.weekReview = all.length ? { start, end: endDay, label: `${fmtDay(start)} to ${fmtDay(endDay)}`, month: monthOf(endDay), ids: all, idx: 0, fresh: ids.length, summary } : null;
 }
 
 export const questionById = (s, id) => D.QUESTIONS[id] || (s.dynQ && s.dynQ[id]) || null;

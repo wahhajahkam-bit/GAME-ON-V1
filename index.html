@@ -36,8 +36,11 @@
 
   <main class="layout" id="layout" data-drawer="half">
     <section class="stage" aria-label="Business map">
-      <div class="canvasWrap" id="canvasWrap"><canvas id="map" aria-label="Map of Zenith Cooling Supplies: orders, staff, warehouse, truck and bank"></canvas>
-        <div class="paused" id="pausedTag" hidden></div>
+      <div class="mapArea">
+        <div class="canvasWrap" id="canvasWrap"><canvas id="map" aria-label="Map of Zenith Cooling Supplies: orders, staff, warehouse, truck and bank"></canvas>
+          <div class="paused" id="pausedTag" hidden></div>
+        </div>
+        <div class="qdock" id="qdock" aria-live="polite"></div>
       </div>
       <div class="feedBar">
         <button class="feedToggle" id="feedToggle" aria-expanded="true" title="Show or hide the latest events">Latest events ▾</button>

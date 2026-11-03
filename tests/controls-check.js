@@ -68,7 +68,7 @@ const ok = (name, cond, info = '') => { console.log(`${cond ? 'PASS' : 'FAIL'}  
   ok('every question has distinct options and one valid answer', valid);
   ok('SE named on orders', s.orders.filter((o) => o.se != null).length === s.orders.length, s.orders.map((o) => o.id + ':SE' + (o.se + 1)).join(' '));
   skipToNextClose(s);
-  ok('skip month keeps one review only', s.weekReview && s.weekReview.ids.length <= 5, s.weekReview && s.weekReview.label);
+  ok('skip month keeps at most 10 waiting', s.weekReview && s.weekReview.ids.length <= 10, s.weekReview && s.weekReview.label + ' ' + s.weekReview.ids.length);
   // all weekly questions across a campaign are valid
   const c = createGame({ seed: 4 });
   let bad = 0, total = 0;

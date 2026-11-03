@@ -59,6 +59,7 @@ body { height: 100dvh; overflow: hidden; }
 .reopen { display: none; position: absolute; right: 0; top: 50%; transform: translateY(-50%); z-index: 12; border: 1.5px solid var(--line); border-right: none; background: var(--ink); color: var(--bg); border-radius: 10px 0 0 10px; padding: 12px 8px; font-weight: 700; font-size: 13px; writing-mode: vertical-rl; }
 .layout[data-drawer="closed"] .reopen { display: block; }
 .stage { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
+.mapArea { position: relative; flex: 1; min-height: 0; display: flex; }
 .canvasWrap { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; background: var(--floor); border: 1px solid var(--line); border-radius: 14px; overflow: auto; overscroll-behavior: contain; }
 #map { display: block; touch-action: pan-x pan-y; }
 .isPaused #btnPause { animation: pulse 1.6s ease-in-out infinite; }
@@ -230,3 +231,26 @@ input[type=number], select { font: inherit; padding: 4px 6px; border: 1.5px soli
 .progress { display: flex; gap: 4px; margin: 6px 0 2px; }
 .progress i { flex: 1; height: 5px; border-radius: 3px; background: var(--soft); }
 .progress i.done { background: var(--good); } .progress i.now { background: var(--rev); }
+
+/* question notification dock (does not pause the game) */
+.qdock { position: absolute; left: 12px; bottom: 12px; z-index: 6; max-width: min(380px, calc(100% - 24px)); }
+.qdock:empty { display: none; }
+.qpill { display: flex; align-items: center; gap: 8px; border: none; background: var(--rev); color: #fff; font-weight: 700; font-size: 13px; padding: 8px 14px; border-radius: 99px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+:root[data-theme="dark"] .qpill { color: #0E1424; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .qpill { color: #0E1424; } }
+.qpill .n { background: rgba(255,255,255,.25); border-radius: 99px; padding: 0 7px; }
+.qpill.new { animation: bump 1.2s ease-in-out 3; }
+@keyframes bump { 50% { transform: translateY(-4px); } }
+.qcard { background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--rev); border-radius: 14px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.28); max-height: min(70vh, 520px); overflow: auto; font-size: 13.5px; }
+.qcard .qh { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.qcard .qh b { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--rev); }
+.qcard h2 { font-size: 17px; margin: 6px 0 4px; }
+.qcard p { margin: 4px 0 6px; }
+.qcard .qopt { font-size: 13.5px; padding: 7px 10px; margin-top: 5px; }
+.qcard .explain { font-size: 13px; padding: 8px 10px; margin-top: 8px; }
+.qcard .wsum { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 6px 0 8px; }
+.qcard .wsum div { padding: 4px 6px; font-size: 11px; }
+.qcard .wsum b { font-size: 13px; }
+.qcard .hideBtn { border: none; background: var(--soft); border-radius: 7px; padding: 3px 9px; font-weight: 700; font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .qpill.new { animation: none; } }
+@media (max-width: 760px) { .qdock { left: 8px; right: 8px; bottom: 8px; max-width: none; } }
